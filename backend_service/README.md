@@ -28,10 +28,19 @@ Server sẽ khởi động tại `http://0.0.0.0:5000`.
 
 ## Chạy kiểm thử
 
-Dự án sử dụng `pytest`. Để chạy toàn bộ test:
+Dự án sử dụng `pytest`. Cấu trúc thư mục test mới:
+- `tests/unit/`: Unit tests (API, Routing, Mocked AI).
+- `tests/integration/`: Integration tests với AI Service thật.
+- `tests/assets/`: Dữ liệu test (ảnh).
 
+Để chạy unit tests:
 ```bash
-uv run pytest
+uv run pytest tests/unit
+```
+
+Để chạy integration tests (yêu cầu AI Service đang chạy):
+```bash
+uv run python tests/integration/verify_integration.py
 ```
 
 ## API Documentation
@@ -127,25 +136,26 @@ Backend Service cần giao tiếp với AI Service qua API để nhận diện n
 
 ### Yêu cầu API AI Service
 
-**Endpoint:** `POST /classify` (hoặc URL được cấu hình trong `AI_SERVICE_URL`)
+**Endpoint:** `POST /api/v1/predict` (URL mặc định: `http://localhost:5000/api/v1/predict`)
 
-**Request Body:**
+**Request Type:** `multipart/form-data`
 
-```json
-{
-  "camera_id": "string",
-  "image_url": "string"
-}
-```
+**Form Fields:**
+- `file`: File ảnh (jpg, png, etc.)
 
 **Response:**
 
 ```json
 {
-  "status": "FLOODED" | "SAFE"
+  "success": true,
+  "prediction": {
+    "class": "flood", // hoặc "dry_road"
+    "confidence": 0.95,
+    "confident": true
+  }
 }
 ```
 
-Nếu status là `FLOODED`, Backend sẽ đánh dấu tọa độ của camera đó là điểm ngập và chặn đường đi qua khu vực đó.
+Nếu `prediction.class` là `flood`, Backend sẽ đánh dấu tọa độ của camera đó là điểm ngập và chặn đường đi qua khu vực đó.
 Vui lòng đảm bảo API phản hồi nhanh (< 500ms) để không làm chậm quá trình tìm đường.
 

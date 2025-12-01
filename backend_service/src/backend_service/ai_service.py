@@ -1,7 +1,7 @@
 import httpx
 import asyncio
 
-AI_SERVICE_URL = "http://localhost:6000/classify" # Placeholder URL
+AI_SERVICE_URL = "http://localhost:5000/api/v1/predict"
 
 async def check_flood_status(camera_data):
     """
@@ -19,28 +19,52 @@ async def check_flood_status(camera_data):
     async with httpx.AsyncClient() as client:
         tasks = []
         for cam in camera_data:
-            # In a real scenario, we might send the snapshot URL or base64 image
-            # Here we assume the AI service can fetch from a URL or we send a dummy payload for now
-            payload = {
-                "camera_id": cam.get("id"),
-                "image_url": cam.get("snapshot_url", "") # Assuming snapshot_url is available or we handle image upload
-            }
-            tasks.append(client.post(AI_SERVICE_URL, json=payload))
+            tasks.append(_process_camera(client, cam))
         
         # Run requests concurrently
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        for i, response in enumerate(responses):
-            if isinstance(response, Exception):
-                print(f"Error checking camera {camera_data[i].get('id')}: {response}")
+        for result in results:
+            if isinstance(result, Exception):
+                print(f"Error processing camera: {result}")
                 continue
-                
-            if response.status_code == 200:
-                result = response.json()
-                # Assuming AI service returns {"status": "FLOODED"} or {"status": "SAFE"}
-                if result.get("status") == "FLOODED":
-                    flooded_coords.append(camera_data[i]["coords"])
-            else:
-                print(f"AI Service returned {response.status_code} for camera {camera_data[i].get('id')}")
+            
+            if result:
+                flooded_coords.append(result)
 
     return flooded_coords
+
+async def _process_camera(client, cam):
+    """Process a single camera: fetch image and classify."""
+    try:
+        # 1. Fetch image from snapshot_url
+        snapshot_url = cam.get("snapshot_url")
+        if not snapshot_url:
+            print(f"No snapshot URL for camera {cam.get('id')}")
+            return None
+
+        # In a real scenario, we would fetch the image. 
+        # For now, we assume the URL is accessible or mocked.
+        img_response = await client.get(snapshot_url)
+        if img_response.status_code != 200:
+            print(f"Failed to fetch image for camera {cam.get('id')}: {img_response.status_code}")
+            return None
+        
+        image_bytes = img_response.content
+
+        # 2. Send image to AI Service
+        files = {'file': ('snapshot.jpg', image_bytes, 'image/jpeg')}
+        response = await client.post(AI_SERVICE_URL, files=files)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("success") and result.get("prediction", {}).get("class") == "flood":
+                return cam["coords"]
+        else:
+            print(f"AI Service returned {response.status_code} for camera {cam.get('id')}: {response.text}")
+            
+    except Exception as e:
+        print(f"Exception processing camera {cam.get('id')}: {e}")
+        raise e
+    
+    return None
