@@ -1,18 +1,46 @@
 import asyncio
 import httpx
 import respx
+import sys
+from pathlib import Path
+
+# Resolve paths relative to this script
+current_dir = Path(__file__).resolve().parent
+assets_dir = current_dir.parent / 'assets'
+
+# Add src to sys.path to allow importing backend_service
+project_root = current_dir.parent.parent.parent # flood-ai (assuming tests/integration/../../..)
+# Actually:
+# current_dir = backend_service/tests/integration
+# current_dir.parent = backend_service/tests
+# current_dir.parent.parent = backend_service
+# current_dir.parent.parent.parent = flood-ai
+# But wait, let's look at test_crawl_images.py again.
+# It used current_file.parent.parent.parent.parent
+# current_file is the file itself.
+# current_file.parent is integration.
+# current_file.parent.parent is tests.
+# current_file.parent.parent.parent is backend_service.
+# current_file.parent.parent.parent.parent is flood-ai.
+
+# In test_verify_integration.py, current_dir is integration.
+# So project_root = current_dir.parent.parent.parent
+project_root = current_dir.parent.parent.parent
+backend_service_src = project_root / 'backend_service' / 'src'
+sys.path.append(str(backend_service_src))
+
 from backend_service.ai_service import check_flood_status
 
 # Configuration for test cases
 TEST_CASES = [
     {
         "name": "Negative Test (Dry Road)",
-        "image_path": "tests/assets/test.jpg",
+        "image_path": str(assets_dir / "test.jpg"),
         "expected_flood": False
     },
     {
         "name": "Positive Test (Flooded)",
-        "image_path": "tests/assets/positive_test.jpg",
+        "image_path": str(assets_dir / "positive_test.jpg"),
         "expected_flood": True
     }
 ]

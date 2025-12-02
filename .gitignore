@@ -10,6 +10,7 @@ wheels/
 # Virtual environments
 .env
 .venv
+<<<<<<< HEAD
 env/
 venv/
 ENV/
@@ -26,3 +27,8 @@ venv.bak/
 # Project specific
 /backend_service/cache/
 /cache/
+=======
+
+# Dataset images
+dataset/imgs/
+>>>>>>> 2ccd242 (feat: Add image fetching utility, integration tests for image crawling and AI service verification, and update gitignore to exclude dataset images.)
