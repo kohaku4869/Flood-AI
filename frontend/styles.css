@@ -1131,7 +1131,8 @@ body {
 
 /* Camera marker styles */
 .camera-icon-flood,
-.camera-icon-normal {
+.camera-icon-normal,
+.camera-icon-invalid {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1150,8 +1151,15 @@ body {
   filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
 }
 
+.camera-icon-invalid {
+  color: #718096;  /* Gray color for invalid cameras */
+  filter: drop-shadow(0 0 8px rgba(113, 128, 150, 0.4));
+  opacity: 0.6;    /* Reduced opacity to indicate inactive state */
+}
+
 .camera-icon-flood:hover,
-.camera-icon-normal:hover {
+.camera-icon-normal:hover,
+.camera-icon-invalid:hover {
   transform: scale(1.2);
 }
 

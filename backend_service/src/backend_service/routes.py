@@ -224,22 +224,31 @@ async def get_camera_image(camera_id: str):
     Get camera image by ID.
     
     Fetches the camera snapshot from the external camera API and returns it.
+    If camera returns invalid image, returns the placeholder invalid_image.jpg.
     """
     from fastapi.responses import Response
     from .get_image import create_session, get_image_by_id
     
     try:
-        # Create session and fetch image
+        # Create session and fetch image (returns tuple: image_bytes, is_valid)
         session = create_session()
-        image_data = get_image_by_id(session, camera_id)
+        image_result = get_image_by_id(session, camera_id)
         
-        if image_data:
+        if image_result and image_result[0]:
+            image_data, is_valid = image_result
+            headers = {
+                "Cache-Control": "public, max-age=30",  # Cache for 30 seconds
+            }
+            
+            # Add header indicating validity
+            if not is_valid:
+                headers["X-Image-Valid"] = "false"
+                logger.debug(f"Returning placeholder image for camera {camera_id}")
+            
             return Response(
                 content=image_data,
                 media_type="image/jpeg",
-                headers={
-                    "Cache-Control": "public, max-age=30",  # Cache for 30 seconds
-                }
+                headers=headers
             )
         else:
             raise HTTPException(

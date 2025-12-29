@@ -81,12 +81,19 @@ async def _process_camera(client: httpx.AsyncClient, image_session, cam_id: str)
         return None
     
     try:
-        # Fetch image from camera
+        # Fetch image from camera (returns tuple: image_bytes, is_valid)
         logger.debug(f"Fetching image for camera {cam_id}")
-        image_bytes = get_image_by_id(image_session, cam_id)
+        image_result = get_image_by_id(image_session, cam_id)
         
-        if not image_bytes:
+        if not image_result or not image_result[0]:
             logger.warning(f"Failed to fetch image for camera {cam_id}")
+            return None
+        
+        image_bytes, is_valid = image_result
+        
+        # Skip processing if image is invalid
+        if not is_valid:
+            logger.warning(f"Camera {cam_id} returned invalid image, skipping AI processing")
             return None
         
         # Send image to AI Service
@@ -226,13 +233,29 @@ async def _process_camera_detailed(client: httpx.AsyncClient, image_session, cam
         return {"is_flooded": False, "confidence": 0.0}
     
     try:
-        # Fetch image from camera
+        # Fetch image from camera (returns tuple: image_bytes, is_valid)
         logger.debug(f"Fetching image for camera {cam_id}")
-        image_bytes = get_image_by_id(image_session, cam_id)
+        image_result = get_image_by_id(image_session, cam_id)
         
-        if not image_bytes:
+        if not image_result or not image_result[0]:
             logger.warning(f"Failed to fetch image for camera {cam_id}")
-            return {"is_flooded": False, "confidence": 0.0}
+            # Mark camera as invalid in flood state
+            from .flood_state import get_flood_state_manager
+            flood_manager = get_flood_state_manager()
+            flood_manager.update_camera_validity(cam_id, False)
+            return {"is_flooded": False, "confidence": 0.0, "is_valid": False}
+        
+        image_bytes, is_valid = image_result
+        
+        # Update camera validity in flood state
+        from .flood_state import get_flood_state_manager
+        flood_manager = get_flood_state_manager()
+        flood_manager.update_camera_validity(cam_id, is_valid)
+        
+        # Skip AI processing if image is invalid
+        if not is_valid:
+            logger.warning(f"Camera {cam_id} returned invalid image, skipping AI processing")
+            return {"is_flooded": False, "confidence": 0.0, "is_valid": False}
         
         # Send image to AI Service
         logger.debug(f"Sending image for camera {cam_id} to AI service")

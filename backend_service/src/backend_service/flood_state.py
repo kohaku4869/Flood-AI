@@ -19,6 +19,7 @@ class CameraFloodState:
     street_name: str = ""  # Camera location name
     last_checked: Optional[datetime] = None
     confidence: float = 0.0
+    is_valid: bool = True  # Whether camera is returning valid images
 
 
 class FloodStateManager:
@@ -88,6 +89,19 @@ class FloodStateManager:
                 self._states[camera_id].confidence = confidence
                 self._states[camera_id].last_checked = datetime.now()
     
+    def update_camera_validity(self, camera_id: str, is_valid: bool) -> None:
+        """
+        Update the validity state for a single camera.
+        
+        Args:
+            camera_id: Camera ID
+            is_valid: Whether the camera is returning valid images
+        """
+        with self._state_lock:
+            if camera_id in self._states:
+                self._states[camera_id].is_valid = is_valid
+                logger.debug(f"Camera {camera_id} validity updated to {is_valid}")
+    
     def get_flooded_coords(self) -> List[Dict[str, float]]:
         """
         Get coordinates of all flooded locations.
@@ -128,6 +142,7 @@ class FloodStateManager:
                     "camera_id": cam_id,
                     "name": state.street_name or cam_id,  # Use street_name as name, fallback to camera_id
                     "is_flooded": is_flooded,
+                    "is_valid": state.is_valid,
                     "coords": state.coords,
                     "last_checked": state.last_checked.isoformat() if state.last_checked else None,
                     "confidence": state.confidence if not self._test_mode else (0.95 if is_flooded else 0.05)

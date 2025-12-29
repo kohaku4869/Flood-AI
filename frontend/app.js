@@ -154,18 +154,25 @@ function updateMapMarkers() {
         }
         
         const isFlooded = cam.is_flooded;
+        const isValid = cam.is_valid !== false;  // Default to true if field is missing
         
         // Extract coordinates from the API response structure
         const lat = cam.coords.lat;
         const lng = cam.coords.lng;
         
         // 1. Camera Marker (for Camera Layer)
-        // Icon based on status
-        const iconHtml = isFlooded 
-            ? '<i class="fa-solid fa-video"></i>' 
-            : '<i class="fa-solid fa-video"></i>';
-            
-        const markerClass = isFlooded ? 'camera-icon-flood' : 'camera-icon-normal';
+        // Icon based on status and validity
+        const iconHtml = '<i class="fa-solid fa-video"></i>';
+        
+        // Determine marker class based on validity and flood status
+        let markerClass;
+        if (!isValid) {
+            markerClass = 'camera-icon-invalid';  // Gray for invalid cameras
+        } else if (isFlooded) {
+            markerClass = 'camera-icon-flood';    // Red for flooded
+        } else {
+            markerClass = 'camera-icon-normal';   // Green for normal
+        }
 
         const marker = L.marker([lat, lng], {
             icon: L.divIcon({
