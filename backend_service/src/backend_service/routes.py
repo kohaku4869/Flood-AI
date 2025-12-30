@@ -83,13 +83,16 @@ async def route_request(request: RouteRequest):
         # Convert flooded_coords from Dict format to List format for GraphHopper API
         flooded_points = [[fc["lat"], fc["lng"]] for fc in flooded_coords] if flooded_coords else []
         
-        # Calculate safe route using GraphHopper API
-        logger.info("Calculating safe route")
-        path_coords_list = get_safe_route(
+        # Calculate safe route using routing service
+        logger.info("Calculating safe route with flood avoidance and traffic awareness")
+        route_result = get_safe_route(
             start_point=[request.start_coords.lat, request.start_coords.lng],
             end_point=[request.end_coords.lat, request.end_coords.lng],
             flooded_points=flooded_points
         )
+        
+        # Extract route coordinates from result dict
+        path_coords_list = route_result.get("route", [])
         
         # Convert response from List format back to Dict format for frontend
         path_coords = [{"lat": coord[0], "lng": coord[1]} for coord in path_coords_list]
@@ -106,10 +109,17 @@ async def route_request(request: RouteRequest):
             "end": request.end_coords.model_dump(),
             "flooded_count": len(flooded_coords),
             "flooded_coords": flooded_coords,
-            "block_radius_meters": config.FLOOD_BLOCK_RADIUS_METERS,  # Let frontend know the block radius
+            "block_radius_meters": config.FLOOD_BLOCK_RADIUS_METERS,
             "path": path_coords,
             "path_length": len(path_coords),
-            "test_mode": flood_manager.test_mode
+            "test_mode": flood_manager.test_mode,
+            # Traffic metadata from TomTom
+            "distance": route_result.get("distance", 0),
+            "ors_duration": route_result.get("ors_duration", 0),
+            "traffic_duration": route_result.get("traffic_duration"),
+            "traffic_delay": route_result.get("traffic_delay", 0),
+            "traffic_status": route_result.get("traffic_status", "unknown"),
+            "traffic_sections": route_result.get("traffic_sections", [])
         }
         
         logger.info(f"Route calculated: {len(path_coords)} waypoints, {len(flooded_coords)} flooded areas")
@@ -260,5 +270,66 @@ async def get_camera_image(camera_id: str):
         raise
     except Exception as e:
         logger.error(f"Error fetching camera image for {camera_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/traffic/tile/{z}/{x}/{y}")
+async def get_traffic_tile(z: int, x: int, y: int, style: str = "relative"):
+    """
+    Proxy endpoint for TomTom traffic flow tiles.
+    
+    Args:
+        z: Zoom level
+        x: Tile X coordinate
+        y: Tile Y coordinate
+        style: Traffic style - 'relative' (default) or 'absolute'
+        
+    Returns:
+        Traffic tile image (PNG)
+    """
+    from fastapi.responses import Response
+    from . import tomtom_service
+    import requests
+    
+    try:
+        # Get tile URL from TomTom service
+        tile_url = tomtom_service.get_traffic_tile_url(z, x, y, style)
+        
+        if not tile_url:
+            raise HTTPException(
+                status_code=503,
+                detail="TomTom API key not configured"
+            )
+        
+        # Add API key as query parameter
+        tile_url_with_key = f"{tile_url}?key={config.TOMTOM_API_KEY}"
+        
+        # Fetch tile from TomTom
+        response = requests.get(
+            tile_url_with_key,
+            timeout=config.TOMTOM_TIMEOUT
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"TomTom tile fetch failed ({response.status_code}): {response.text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Failed to fetch traffic tile"
+            )
+        
+        # Return the tile image
+        return Response(
+            content=response.content,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=120",  # Cache for 2 minutes (TomTom updates every minute)
+                "X-Traffic-Style": style
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching traffic tile {z}/{x}/{y}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 

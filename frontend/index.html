@@ -182,6 +182,40 @@
                 <span id="status-text" class="status-text">Sẵn sàng</span>
               </div>
             </div>
+
+            <div class="layer-item">
+              <div class="layer-info">
+                <svg class="layer-icon traffic-icon" width="20" height="20" viewBox="0 0 576 512" fill="currentColor">
+                  <path d="M288 0c-69.59 0-126 56.41-126 126 0 56.26 82.35 158.8 113.9 196.02 6.39 7.54 17.82 7.54 24.2 0C331.65 284.8 414 182.26 414 126 414 56.41 357.59 0 288 0zm0 168c-23.2 0-42-18.8-42-42s18.8-42 42-42 42 18.8 42 42-18.8 42-42 42zM20.12 215.95A32.006 32.006 0 0 0 0 245.66v250.32c0 11.32 11.43 19.06 21.94 14.86L160 448V214.92c-8.84-15.98-16.34-31.54-21.86-46.43L20.12 215.95zm459.81-46.43C473.81 183.46 466.31 199.02 457.47 214.92V448l138.06 62.84c10.51 4.2 21.94-3.54 21.94-14.86V245.66c0-12.45-7.27-23.75-18.59-28.92l-118.02-47.22z"/>
+                </svg>
+                <span class="layer-label">Hiển thị Giao thông</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-traffic" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Traffic Legend -->
+          <div id="traffic-legend" class="traffic-legend">
+            <h3 class="section-title">Mật độ giao thông (trên route)</h3>
+            <div class="legend-items">
+              <div class="legend-item">
+                <span class="legend-color" style="background: #00D000"></span>
+                <span class="legend-label">Thông thoáng</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-color" style="background: #FFD700"></span>
+                <span class="legend-label">Trung bình</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-color" style="background: #FF0000"></span>
+                <span class="legend-label">Tắc đường</span>
+              </div>
+            </div>
           </div>
 
           <!-- Inspection Tab Content (Placeholder) -->

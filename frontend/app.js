@@ -8,7 +8,8 @@ const state = {
     cameras: [],      // Array of camera objects
     cameraLayer: null, // Leaflet LayerGroup
     floodLayer: null,  // Leaflet LayerGroup
-    routeLayer: null,  // Leaflet Polyline
+    routeLayer: null,  // Leaflet LayerGroup for route segments
+    trafficLayer: null, // Not used anymore - traffic shown on route
     startMarker: null,
     endMarker: null,
     blockRadius: 150,  // Block radius in meters (will be updated from backend)
@@ -43,7 +44,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 }).addTo(map);
 
 // Layers
-state.cameraLayer = L.layerGroup(); // Not added by default based on prompt req? "Check to show"
+state.cameraLayer = L.layerGroup(); // Not added by default
 state.floodLayer = L.layerGroup().addTo(map); // Added by default
 
 // Icons
@@ -72,10 +73,16 @@ async function fetchFloodStatus() {
         
         state.cameras = data.cameras;
         updateMapMarkers();
-        updateStatus(`Loaded ${data.total_cameras} cameras. ${data.flooded_count} flooded.`);
+        
+        // Only update status if there's no active route info
+        if (!currentRouteInfo) {
+            updateStatus(`Loaded ${data.total_cameras} cameras. ${data.flooded_count} flooded.`);
+        }
     } catch (error) {
         console.error('Error fetching flood status:', error);
-        updateStatus('Error loading flood data', 'danger');
+        if (!currentRouteInfo) {
+            updateStatus('Error loading flood data', 'danger');
+        }
     }
 }
 
@@ -105,30 +112,125 @@ async function findRoute() {
         const result = await response.json();
         const routeData = result.data;
 
-        // Draw Route
+        // Draw Route with Traffic Visualization
         if (state.routeLayer) map.removeLayer(state.routeLayer);
         
+        // Create a layer group for route segments
+        state.routeLayer = L.layerGroup().addTo(map);
+        
         // Backend returns path as array of {lat, lng} objects
-        // Convert to Leaflet format: [[lat, lng], [lat, lng], ...]
         const pathCoords = routeData.path.map(coord => [coord.lat, coord.lng]);
         
-        state.routeLayer = L.polyline(pathCoords, {
-            color: '#00b14f',
+        // Determine how to color the route based on ACTUAL traffic delay
+        // Don't trust backend status field, calculate ourselves
+        let trafficStatus = 'unknown';
+        
+        // Calculate traffic status from actual delay
+        if (routeData.traffic_duration !== null && routeData.traffic_duration !== undefined) {
+            const delaySeconds = routeData.traffic_delay || 0;
+            const orsSeconds = routeData.ors_duration || 1;
+            
+            if (orsSeconds > 0) {
+                const delayRatio = delaySeconds / orsSeconds;
+                
+                // More strict thresholds for better accuracy
+                if (delayRatio >= 0.25) {  // 25%+ delay = heavy
+                    trafficStatus = 'heavy';
+                } else if (delayRatio >= 0.10) {  // 10-25% delay = moderate
+                    trafficStatus = 'moderate';
+                } else {  // < 10% delay = clear
+                    trafficStatus = 'clear';
+                }
+            } else {
+                trafficStatus = 'clear';
+            }
+        }
+        
+        // Color mapping for traffic status
+        const getTrafficColor = (status) => {
+            switch(status) {
+                case 'clear': return '#00D000';      // Green
+                case 'moderate': return '#FFD700';   // Yellow/Gold
+                case 'heavy': return '#FF0000';      // Red
+                default: return '#667eea';           // Blue (no traffic data)
+            }
+        };
+        
+        // Draw base route (green - no traffic or clear)
+        // Base route shadow
+        L.polyline(pathCoords, {
+            color: '#000000',
+            weight: 10,
+            opacity: 0.2,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(state.routeLayer);
+        
+        // Base route (green)
+        L.polyline(pathCoords, {
+            color: '#00D000',
             weight: 6,
-            opacity: 0.8,
-            lineCap: 'round'
-        }).addTo(map);
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(state.routeLayer);
+        
+        // Overlay traffic sections with colors based on status
+        const trafficSections = routeData.traffic_sections || [];
+        
+        if (trafficSections.length > 0) {
+            console.log(`Drawing ${trafficSections.length} traffic segments`);
+            
+            trafficSections.forEach(section => {
+                const sectionCoords = section.coords.map(c => [c[0], c[1]]);
+                
+                if (sectionCoords.length >= 2) {
+                    // Draw segment with appropriate color
+                    // All segments are drawn - green ones overlay the base green,
+                    // yellow/red ones create visible contrast
+                    L.polyline(sectionCoords, {
+                        color: getTrafficColor(section.status),
+                        weight: 6,
+                        opacity: 0.95,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(state.routeLayer);
+                }
+            });
+        }
 
-        map.fitBounds(state.routeLayer.getBounds(), { padding: [50, 50] });
+        // Fit map to route bounds
+        const bounds = L.latLngBounds(pathCoords);
+        map.fitBounds(bounds, { padding: [50, 50] });
         
         // Update block radius if provided by backend
         if (routeData.block_radius_meters) {
             state.blockRadius = routeData.block_radius_meters;
-            // Refresh flood visualization to use new radius
             updateMapMarkers();
         }
         
-        updateStatus(`Route found! Length: ${routeData.path_length} nodes. Avoided ${routeData.flooded_count} floods (${state.blockRadius}m radius).`);
+        // Format status message
+        let statusMsg = `Route found! Avoided ${routeData.flooded_count} floods.`;
+        
+        // Add time estimates
+        const orsMin = Math.round((routeData.ors_duration || 0) / 60);
+        
+        if (routeData.traffic_duration !== null && routeData.traffic_duration !== undefined) {
+            const trafficMin = Math.round(routeData.traffic_duration / 60);
+            const delayMin = Math.round((routeData.traffic_delay || 0) / 60);
+            
+            // Show both ORS estimate and TomTom traffic time
+            statusMsg += ` | Thời gian: ${orsMin} phút`;
+            
+            if (delayMin > 0) {
+                statusMsg += ` (+${delayMin} phút tắc đường)`;
+            }
+        } else {
+            statusMsg += ` | Thời gian ước tính: ${orsMin} phút`;
+        }
+        
+        // Update route info (persistent display)
+        updateRouteInfo(statusMsg);
 
     } catch (error) {
         console.error('Error finding route:', error);
@@ -516,6 +618,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Traffic toggle is now just a visual indicator
+    // Traffic is automatically shown on route when available
+    const toggleTraffic = document.getElementById('toggle-traffic');
+    // Keep toggle checked by default to indicate traffic is active
+    toggleTraffic.checked = true;
+    toggleTraffic.disabled = true; // Disable since it's always on for routes
+    
+    // Add tooltip/title to explain
+    const trafficLabel = toggleTraffic.closest('.layer-item');
+    if (trafficLabel) {
+        trafficLabel.title = 'Giao thông tự động hiển thị trên route';
+    }
+
     // Test Mode
     const toggleTest = document.getElementById('toggle-test-mode');
     toggleTest.addEventListener('change', async (e) => {
@@ -587,10 +702,20 @@ function updateStatus(msg, type='info') {
     const text = document.getElementById('status-text');
     panel.classList.remove('hidden');
     text.textContent = msg;
-    
-    // Auto hide after 5s
-    setTimeout(() => {
-        // panel.classList.add('d-none'); 
-        // Don't auto hide status, good to see state
-    }, 5000);
+    // Status panel no longer auto-hides
+}
+
+// Persistent route info display (won't be overwritten by flood status updates)
+let currentRouteInfo = null;
+
+function updateRouteInfo(msg) {
+    currentRouteInfo = msg;
+    const panel = document.getElementById('status-panel');
+    const text = document.getElementById('status-text');
+    panel.classList.remove('hidden');
+    text.textContent = msg;
+}
+
+function clearRouteInfo() {
+    currentRouteInfo = null;
 }

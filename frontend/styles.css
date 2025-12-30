@@ -1188,3 +1188,78 @@ body {
 .location-icon-end:hover {
   transform: scale(1.1);
 }
+
+/* ================================
+   Traffic Layer Styles
+   ================================ */
+.layer-icon.traffic-icon {
+  color: #f6ad55; /* Orange color for traffic */
+}
+
+/* Traffic Legend */
+.traffic-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.legend-color {
+  width: 24px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.legend-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* Traffic Status Indicators */
+.traffic-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.traffic-status.clear {
+  background: rgba(72, 187, 120, 0.2);
+  color: var(--color-success);
+}
+
+.traffic-status.moderate {
+  background: rgba(246, 173, 85, 0.2);
+  color: var(--color-warning);
+}
+
+.traffic-status.heavy {
+  background: rgba(252, 129, 129, 0.2);
+  color: var(--color-error);
+}
+
+.traffic-status::before {
+  content: "●";
+  font-size: 10px;
+}

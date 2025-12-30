@@ -50,3 +50,13 @@ Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
 # Flood Check Configuration
 FLOOD_CHECK_INTERVAL_MINUTES = int(os.getenv("FLOOD_CHECK_INTERVAL_MINUTES", "60"))
 FLOOD_BLOCK_RADIUS_METERS = int(os.getenv("FLOOD_BLOCK_RADIUS_METERS", "150"))  # Radius to block around flooded cameras
+
+# TomTom API Configuration
+TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY", "")
+TOMTOM_TRAFFIC_FLOW_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData"
+TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute"
+TOMTOM_TILE_URL = "https://api.tomtom.com/traffic/map/4/tile/flow"
+TOMTOM_TIMEOUT = int(os.getenv("TOMTOM_TIMEOUT", "10"))
+
+# Traffic Cache Configuration
+TRAFFIC_CACHE_TTL_SECONDS = int(os.getenv("TRAFFIC_CACHE_TTL_SECONDS", "120"))  # 2 minutes
