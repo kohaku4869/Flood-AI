@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flood-AI - Hệ thống Dẫn đường Thông minh</title>
-
+    <link rel="icon" href="assets/favicon_io/favicon.ico" type="image/x-icon">
     <!-- Leaflet CSS -->
     <link
       rel="stylesheet"
@@ -159,10 +159,41 @@
                   <span class="toggle-slider"></span>
                 </label>
               </div>
+
+              <div class="layer-item">
+                <div class="layer-info">
+                  <svg class="layer-icon traffic-icon" width="20" height="20" viewBox="0 0 576 512" fill="currentColor">
+                    <path d="M288 0c-69.59 0-126 56.41-126 126 0 56.26 82.35 158.8 113.9 196.02 6.39 7.54 17.82 7.54 24.2 0C331.65 284.8 414 182.26 414 126 414 56.41 357.59 0 288 0zm0 168c-23.2 0-42-18.8-42-42s18.8-42 42-42 42 18.8 42 42-18.8 42-42 42zM20.12 215.95A32.006 32.006 0 0 0 0 245.66v250.32c0 11.32 11.43 19.06 21.94 14.86L160 448V214.92c-8.84-15.98-16.34-31.54-21.86-46.43L20.12 215.95zm459.81-46.43C473.81 183.46 466.31 199.02 457.47 214.92V448l138.06 62.84c10.51 4.2 21.94-3.54 21.94-14.86V245.66c0-12.45-7.27-23.75-18.59-28.92l-118.02-47.22z"/>
+                  </svg>
+                  <span class="layer-label">Hiển thị Giao thông</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="toggle-traffic" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
             </div>
 
             <div class="divider"></div>
 
+            <div id="traffic-legend" class="traffic-legend">
+            <h3 class="section-title">Mật độ giao thông (trên route)</h3>
+              <div class="legend-items">
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #00D000"></span>
+                  <span class="legend-label">Thông thoáng</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #FFD700"></span>
+                  <span class="legend-label">Trung bình</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #FF0000"></span>
+                  <span class="legend-label">Tắc đường</span>
+                </div>
+              </div>
+            </div>       
+            <div class="divider"></div>
             <!-- Dev Tools Section -->
             <div class="dev-section">
               <h3 class="section-title dev-title">Công cụ phát triển</h3>
@@ -182,48 +213,99 @@
                 <span id="status-text" class="status-text">Sẵn sàng</span>
               </div>
             </div>
+          </div> 
 
-            <div class="layer-item">
-              <div class="layer-info">
-                <svg class="layer-icon traffic-icon" width="20" height="20" viewBox="0 0 576 512" fill="currentColor">
-                  <path d="M288 0c-69.59 0-126 56.41-126 126 0 56.26 82.35 158.8 113.9 196.02 6.39 7.54 17.82 7.54 24.2 0C331.65 284.8 414 182.26 414 126 414 56.41 357.59 0 288 0zm0 168c-23.2 0-42-18.8-42-42s18.8-42 42-42 42 18.8 42 42-18.8 42-42 42zM20.12 215.95A32.006 32.006 0 0 0 0 245.66v250.32c0 11.32 11.43 19.06 21.94 14.86L160 448V214.92c-8.84-15.98-16.34-31.54-21.86-46.43L20.12 215.95zm459.81-46.43C473.81 183.46 466.31 199.02 457.47 214.92V448l138.06 62.84c10.51 4.2 21.94-3.54 21.94-14.86V245.66c0-12.45-7.27-23.75-18.59-28.92l-118.02-47.22z"/>
-                </svg>
-                <span class="layer-label">Hiển thị Giao thông</span>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="toggle-traffic" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
+          <!-- <div class="divider"></div> -->
 
-          <div class="divider"></div>
-
-          <!-- Traffic Legend -->
-          <div id="traffic-legend" class="traffic-legend">
-            <h3 class="section-title">Mật độ giao thông (trên route)</h3>
-            <div class="legend-items">
-              <div class="legend-item">
-                <span class="legend-color" style="background: #00D000"></span>
-                <span class="legend-label">Thông thoáng</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-color" style="background: #FFD700"></span>
-                <span class="legend-label">Trung bình</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-color" style="background: #FF0000"></span>
-                <span class="legend-label">Tắc đường</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Inspection Tab Content (Placeholder) -->
+          <!-- Inspection Tab Content - Soi Ngập -->
           <div class="tab-content" id="content-inspection">
-            <div class="placeholder-content">
-              <div class="placeholder-icon">👁️</div>
-              <h3 class="placeholder-title">Chức năng Soi ngập</h3>
-              <p class="placeholder-text">Tính năng này đang được phát triển...</p>
+            <!-- Hour Selector -->
+            <div class="prediction-section">
+              <h3 class="section-title">Dự báo ngập lụt</h3>
+              
+              <div class="hour-selector">
+                <label class="input-label">Xem dự báo cho:</label>
+                <div class="hour-slider-container">
+                  <input type="range" id="hour-slider" min="1" max="12" value="1" class="hour-slider">
+                  <div class="hour-display">
+                    <span id="hour-value">1</span> giờ tới
+                  </div>
+                </div>
+                <div class="hour-marks">
+                  <span>1h</span>
+                  <span>6h</span>
+                  <span>12h</span>
+                </div>
+              </div>
+
+              <button class="secondary-btn" id="btn-refresh-predictions">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 4v6h-6M1 20v-6h6"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+                <span>Cập nhật</span>
+              </button>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Risk Summary -->
+            <div class="risk-summary">
+              <h3 class="section-title">Tổng quan</h3>
+              <div class="risk-stats">
+                <div class="risk-stat high">
+                  <span class="stat-value" id="stat-high-risk">--</span>
+                  <span class="stat-label">Nguy hiểm</span>
+                </div>
+                <div class="risk-stat medium">
+                  <span class="stat-value" id="stat-medium-risk">--</span>
+                  <span class="stat-label">T.Bình</span>
+                </div>
+                <div class="risk-stat low">
+                  <span class="stat-value" id="stat-low-risk">--</span>
+                  <span class="stat-label">An toàn</span>
+                </div>
+              </div>
+              <div class="cache-info">
+                <span id="cache-timestamp">Chưa có dữ liệu</span>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Risk Legend -->
+            <div class="risk-legend">
+              <h3 class="section-title">Mức độ rủi ro</h3>
+              <div class="legend-items">
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #ef4444"></span>
+                  <span class="legend-label">Rất cao (≥80%)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #f97316"></span>
+                  <span class="legend-label">Cao (60-80%)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #eab308"></span>
+                  <span class="legend-label">Trung bình (40-60%)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: #22c55e"></span>
+                  <span class="legend-label">Thấp (<40%)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- High Risk Cameras List -->
+            <div class="camera-risk-list">
+              <h3 class="section-title">Camera rủi ro cao</h3>
+              <div id="high-risk-cameras" class="camera-list">
+                <div class="camera-list-empty">
+                  Chọn giờ dự báo để xem danh sách
+                </div>
+              </div>
             </div>
           </div>
         </div>

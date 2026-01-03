@@ -333,3 +333,142 @@ async def get_traffic_tile(z: int, x: int, y: int, style: str = "relative"):
         logger.error(f"Error fetching traffic tile {z}/{x}/{y}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# Risk Prediction Endpoints for "Soi Ngập" Tab
+# ============================================================================
+
+class PredictionResponse(BaseModel):
+    """Response for risk predictions."""
+    hour: int
+    cache_timestamp: Optional[str]
+    total_cameras: int
+    high_risk_count: int
+    cameras: List[dict]
+
+
+class PredictionSummaryResponse(BaseModel):
+    """Response for prediction summary."""
+    cache_timestamp: Optional[str]
+    hours_available: List[int]
+    summary: List[dict]
+
+
+@router.get("/predictions/{hour}", response_model=PredictionResponse)
+async def get_predictions(hour: int):
+    """
+    Get risk predictions for a specific hour ahead.
+    
+    Args:
+        hour: Hours ahead (1-12)
+        
+    Returns:
+        List of camera predictions with risk scores and colors
+    """
+    if hour < 1 or hour > 12:
+        raise HTTPException(
+            status_code=400,
+            detail="Hour must be between 1 and 12"
+        )
+    
+    from .scheduler import get_risk_runner
+    
+    risk_runner = get_risk_runner()
+    predictions = risk_runner.get_cached_predictions(hour)
+    
+    # If no cached predictions, calculate on demand
+    if not predictions:
+        try:
+            predictions = risk_runner.predict(time_context=hour)
+        except Exception as e:
+            logger.error(f"Failed to calculate predictions for hour {hour}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # Format camera data for frontend
+    camera_data = []
+    for p in predictions:
+        camera_data.append({
+            "camera_id": p.get("CamId", p.get("id", "")),
+            "name": p.get("Street_Name", p.get("street_name", "")),
+            "lat": p.get("Latitude", p.get("coords", {}).get("lat", 0)),
+            "lng": p.get("Longitude", p.get("coords", {}).get("lng", 0)),
+            "risk": p.get("risk", 0),
+            "risk_level": p.get("risk_level", "low"),
+            "risk_color": p.get("risk_color", "#22c55e"),
+            "coef": p.get("Coef", 0.3)
+        })
+    
+    cache_timestamp = risk_runner.get_cache_timestamp()
+    high_risk_count = sum(1 for c in camera_data if c["risk"] >= 0.5)
+    
+    return PredictionResponse(
+        hour=hour,
+        cache_timestamp=cache_timestamp.isoformat() if cache_timestamp else None,
+        total_cameras=len(camera_data),
+        high_risk_count=high_risk_count,
+        cameras=camera_data
+    )
+
+
+@router.get("/predictions/summary", response_model=PredictionSummaryResponse)
+async def get_predictions_summary():
+    """
+    Get summary of predictions for all hours (1-12).
+    
+    Returns count of high-risk cameras per hour.
+    """
+    from .scheduler import get_risk_runner
+    
+    risk_runner = get_risk_runner()
+    cache_timestamp = risk_runner.get_cache_timestamp()
+    
+    summary = []
+    hours_available = []
+    
+    for hour in range(1, 13):
+        predictions = risk_runner.get_cached_predictions(hour)
+        if predictions:
+            hours_available.append(hour)
+            high_risk = sum(1 for p in predictions if p.get("risk", 0) >= 0.5)
+            medium_risk = sum(1 for p in predictions if 0.25 <= p.get("risk", 0) < 0.5)
+            low_risk = len(predictions) - high_risk - medium_risk
+            
+            summary.append({
+                "hour": hour,
+                "total": len(predictions),
+                "high_risk": high_risk,
+                "medium_risk": medium_risk,
+                "low_risk": low_risk
+            })
+    
+    return PredictionSummaryResponse(
+        cache_timestamp=cache_timestamp.isoformat() if cache_timestamp else None,
+        hours_available=hours_available,
+        summary=summary
+    )
+
+
+@router.post("/risk-job/trigger")
+async def trigger_risk_job():
+    """
+    Manually trigger the hourly risk job.
+    
+    Updates coefficients from AI, calculates 1-12h predictions, and logs training data.
+    """
+    from .scheduler import trigger_immediate_risk_job
+    
+    try:
+        await trigger_immediate_risk_job()
+        
+        from .scheduler import get_risk_runner
+        risk_runner = get_risk_runner()
+        cache_timestamp = risk_runner.get_cache_timestamp()
+        
+        return {
+            "status": "success",
+            "message": "Risk job completed",
+            "cache_timestamp": cache_timestamp.isoformat() if cache_timestamp else None
+        }
+    except Exception as e:
+        logger.error(f"Failed to trigger risk job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from pathlib import Path
 from .logger import logger
 from . import config
-
+from datetime import datetime
 class CameraService:
     """Service for managing camera dataset."""
     
@@ -36,6 +36,13 @@ class CameraService:
             for _, row in df.iterrows():
                 cam_id = str(row['CamId'])
                 self.cameras[cam_id] = {
+                    'CamId': cam_id,
+                    'Street_Name': row['Street_Name'],
+                    'Latitude': float(row['Latitude']),
+                    'Longitude': float(row['Longitude']),
+                    'Coef': float(row['Coef']),
+                    'Last_Update': row['Last_Update'],
+                    # Also keep convenience keys for backwards compatibility
                     'id': cam_id,
                     'street_name': row['Street_Name'],
                     'coords': {
@@ -80,6 +87,15 @@ class CameraService:
             else:
                 logger.warning(f"Camera ID {cam_id} not found in dataset")
         return cameras
+    
+    def get_cameras_info(self) -> List[Dict]:
+        """
+        Get all camera information.
+        
+        Returns:
+            List of camera information dictionaries
+        """
+        return list(self.cameras.values())
     
     def validate_camera_ids(self, cam_ids: List[str]) -> tuple[List[str], List[str]]:
         """

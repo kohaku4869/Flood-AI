@@ -587,6 +587,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 content.classList.remove('active');
             });
             document.getElementById(`content-${tabId}`).classList.add('active');
+            
+            // Clear risk markers when switching to routing tab
+            if (tabId === 'routing' && predictionState.riskMarkerLayer) {
+                predictionState.riskMarkerLayer.clearLayers();
+            }
         });
     });
     
@@ -719,3 +724,218 @@ function updateRouteInfo(msg) {
 function clearRouteInfo() {
     currentRouteInfo = null;
 }
+
+// ============================================================================
+// Soi Ngập - Prediction Functionality
+// ============================================================================
+
+// Prediction state
+const predictionState = {
+    currentHour: 1,
+    predictions: [],
+    cacheTimestamp: null,
+    riskMarkerLayer: null
+};
+
+// Initialize risk marker layer
+predictionState.riskMarkerLayer = L.layerGroup();
+
+// Fetch predictions for a specific hour
+async function fetchPredictions(hour) {
+    try {
+        const response = await fetch(`${BACKEND_URL}/predictions/${hour}`);
+        if (!response.ok) throw new Error('Failed to fetch predictions');
+        
+        const data = await response.json();
+        predictionState.predictions = data.cameras;
+        predictionState.cacheTimestamp = data.cache_timestamp;
+        
+        return data;
+    } catch (error) {
+        console.error('Error fetching predictions:', error);
+        return null;
+    }
+}
+
+// Update the prediction UI with fetched data
+function updatePredictionUI(data) {
+    if (!data) {
+        document.getElementById('stat-high-risk').textContent = '--';
+        document.getElementById('stat-medium-risk').textContent = '--';
+        document.getElementById('stat-low-risk').textContent = '--';
+        document.getElementById('cache-timestamp').textContent = 'Lỗi tải dữ liệu';
+        return;
+    }
+    
+    // Count risk levels - matching backend thresholds:
+    // low: < 0.4, medium: 0.4-0.6, high: 0.6-0.8, very high: >= 0.8
+    let veryHigh = 0, high = 0, medium = 0, low = 0;
+    data.cameras.forEach(cam => {
+        if (cam.risk >= 0.8) veryHigh++;
+        else if (cam.risk >= 0.6) high++;
+        else if (cam.risk >= 0.4) medium++;
+        else low++;
+    });
+    
+    // Update stats
+    // Combine veryHigh + high as "Nguy hiểm" (danger)
+    document.getElementById('stat-high-risk').textContent = veryHigh + high;
+    document.getElementById('stat-medium-risk').textContent = medium;
+    document.getElementById('stat-low-risk').textContent = low;
+    
+    // Update timestamp
+    if (data.cache_timestamp) {
+        const date = new Date(data.cache_timestamp);
+        document.getElementById('cache-timestamp').textContent = 
+            `Cập nhật: ${date.toLocaleString('vi-VN')}`;
+    } else {
+        document.getElementById('cache-timestamp').textContent = 'Dữ liệu thời gian thực';
+    }
+    
+    // Update high risk camera list
+    updateHighRiskCameraList(data.cameras);
+    
+    // Update map markers
+    displayPredictionMarkers(data.cameras);
+}
+
+// Update the high risk camera list
+function updateHighRiskCameraList(cameras) {
+    const container = document.getElementById('high-risk-cameras');
+    
+    // Filter high risk cameras (risk >= 0.6 - medium and above)
+    const highRiskCameras = cameras
+        .filter(cam => cam.risk >= 0.6)
+        .sort((a, b) => b.risk - a.risk)
+        .slice(0, 10); // Top 10
+    
+    if (highRiskCameras.length === 0) {
+        container.innerHTML = '<div class="camera-list-empty">Không có camera rủi ro cao</div>';
+        return;
+    }
+    
+    container.innerHTML = highRiskCameras.map(cam => {
+        const riskPercent = (cam.risk * 100).toFixed(0);
+        const badgeClass = cam.risk >= 0.8 ? 'very-high' : cam.risk >= 0.6 ? 'high' : 'medium';
+        const badgeText = cam.risk >= 0.8 ? 'Rất cao' : cam.risk >= 0.6 ? 'Cao' : 'TB';
+        
+        return `
+            <div class="camera-risk-item" data-lat="${cam.lat}" data-lng="${cam.lng}" data-id="${cam.camera_id}">
+                <div class="camera-risk-indicator" style="background: ${cam.risk_color}"></div>
+                <div class="camera-risk-info">
+                    <div class="camera-risk-name">${cam.name || cam.camera_id}</div>
+                    <div class="camera-risk-value">Rủi ro: ${riskPercent}%</div>
+                </div>
+                <span class="camera-risk-badge ${badgeClass}">${badgeText}</span>
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers to zoom to camera
+    container.querySelectorAll('.camera-risk-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const lat = parseFloat(item.dataset.lat);
+            const lng = parseFloat(item.dataset.lng);
+            map.setView([lat, lng], 16);
+        });
+    });
+}
+
+// Display prediction markers on the map
+function displayPredictionMarkers(cameras) {
+    // Clear existing markers
+    predictionState.riskMarkerLayer.clearLayers();
+    
+    cameras.forEach(cam => {
+        if (!cam.lat || !cam.lng) return;
+        
+        // Create circle marker with risk color
+        const marker = L.circleMarker([cam.lat, cam.lng], {
+            radius: 8,
+            fillColor: cam.risk_color || '#22c55e',
+            color: '#ffffff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        });
+        
+        // Add tooltip
+        const riskPercent = (cam.risk * 100).toFixed(0);
+        marker.bindTooltip(`
+            <strong>${cam.name || cam.camera_id}</strong><br>
+            Rủi ro: ${riskPercent}%<br>
+            Mức: ${cam.risk_level}
+        `, { 
+            direction: 'top',
+            offset: [0, -10]
+        });
+        
+        predictionState.riskMarkerLayer.addLayer(marker);
+    });
+    
+    // Add layer to map if not already added
+    if (!map.hasLayer(predictionState.riskMarkerLayer)) {
+        map.addLayer(predictionState.riskMarkerLayer);
+    }
+}
+
+// Trigger manual risk job
+async function triggerRiskJob() {
+    try {
+        showLoading(true);
+        const response = await fetch(`${BACKEND_URL}/risk-job/trigger`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Refresh predictions for current hour
+            const predictions = await fetchPredictions(predictionState.currentHour);
+            updatePredictionUI(predictions);
+        }
+    } catch (error) {
+        console.error('Error triggering risk job:', error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Initialize prediction tab event listeners
+function initPredictionTab() {
+    const hourSlider = document.getElementById('hour-slider');
+    const hourValue = document.getElementById('hour-value');
+    const refreshBtn = document.getElementById('btn-refresh-predictions');
+    
+    // Hour slider change
+    hourSlider.addEventListener('input', (e) => {
+        const hour = parseInt(e.target.value);
+        hourValue.textContent = hour;
+        predictionState.currentHour = hour;
+    });
+    
+    // Hour slider change (on release)
+    hourSlider.addEventListener('change', async (e) => {
+        const hour = parseInt(e.target.value);
+        showLoading(true);
+        const predictions = await fetchPredictions(hour);
+        updatePredictionUI(predictions);
+        showLoading(false);
+    });
+    
+    // Refresh button
+    refreshBtn.addEventListener('click', triggerRiskJob);
+    
+    // Load initial predictions when tab is shown
+    const inspectionTab = document.getElementById('tab-inspection');
+    inspectionTab.addEventListener('click', async () => {
+        if (predictionState.predictions.length === 0) {
+            showLoading(true);
+            const predictions = await fetchPredictions(predictionState.currentHour);
+            updatePredictionUI(predictions);
+            showLoading(false);
+        }
+    });
+}
+
+// Add to DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    initPredictionTab();
+});

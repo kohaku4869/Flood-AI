@@ -33,7 +33,7 @@ OPENROUTE_BASE_URL = os.getenv("OPENROUTE_BASE_URL", "https://api.openrouteservi
 
 # Camera Dataset Configuration
 # CAMERA_DATASET_PATH = Path(os.getenv("CAMERA_DATASET_PATH", "dataset/dataset_camera_day_du.csv"))
-CAMERA_DATASET_PATH = project_root / "dataset" / "dataset_camera_day_du.csv"
+CAMERA_DATASET_PATH = project_root / "dataset" / "dataset_camera_day_du2.csv"
 
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -60,3 +60,36 @@ TOMTOM_TIMEOUT = int(os.getenv("TOMTOM_TIMEOUT", "10"))
 
 # Traffic Cache Configuration
 TRAFFIC_CACHE_TTL_SECONDS = int(os.getenv("TRAFFIC_CACHE_TTL_SECONDS", "120"))  # 2 minutes
+
+# Tide Data Path
+TIDE_DATA_PATH = project_root / "dataset" / "tide_data_cleaned.csv"
+
+# Risk Check Configuration
+RISK_CHECK_INTERVAL_HOURS = int(os.getenv("RISK_CHECK_INTERVAL_HOURS", "1"))
+
+# Training Data Logging
+TRAINING_DATA_DIR = project_root / "logs" / "training_data"
+
+# Critical thresholds for fixed min max scaling
+CRITICAL = {
+    "tide_m": 1.7,
+    "tide_delta_m": 0.2,
+    "rain_1h_mm": 50,
+    "rain_3h_mm": 100
+}
+
+# Risk thresholds
+RISK_THRESHOLDS = {
+    "low": 0.4,
+    "medium": 0.6,
+    "high": 0.8,
+    "very high": 1.0
+}
+
+# Risk weights
+WEIGHTS = {
+    "rain": 0.35,
+    "tide": 0.30,
+    "tide_trend": 0.15,
+    "coef": 0.20
+}
