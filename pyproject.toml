@@ -14,6 +14,7 @@ dependencies = [
 members = [
     "ai_service",
     "backend_service",
+    "agent_service",
 ]
 
 [tool.uv.sources]
