@@ -59,6 +59,24 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class WeatherData(BaseModel):
+    """Weather data for a specific time."""
+    rain_3h: float = Field(..., description="Rainfall in last/next 3 hours (mm)")
+    rain_level: str = Field(..., description="Rain level label in Vietnamese")
+    rain_color: str = Field(..., description="Color for rain level")
+    tide: float = Field(..., description="Tide level (meters)")
+    tide_level: str = Field(..., description="Tide level label in Vietnamese")
+    tide_color: str = Field(..., description="Color for tide level")
+    tide_delta: float = Field(default=0, description="Tide change from previous hour")
+    timestamp: str = Field(..., description="Data timestamp")
+
+
+class WeatherResponse(BaseModel):
+    """Response for weather endpoint."""
+    hour: int = Field(..., description="Hour offset (0=current, 1-12=future)")
+    weather: WeatherData
+
+
 # ============================================================================
 # Routes
 # ============================================================================
@@ -472,3 +490,142 @@ async def trigger_risk_job():
     except Exception as e:
         logger.error(f"Failed to trigger risk job: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Weather Endpoints
+# ============================================================================
+
+def get_rain_level(rain_3h: float) -> tuple[str, str]:
+    """
+    Get rain level label and color based on 3-hour rainfall.
+    
+    Returns:
+        tuple of (label, color)
+    """
+    if rain_3h <= 0:
+        return ("Không mưa", "#22c55e")  # Green
+    elif rain_3h <= 6:
+        return ("Mưa nhẹ", "#84cc16")    # Lime
+    elif rain_3h <= 12:
+        return ("Mưa vừa", "#eab308")    # Yellow
+    elif rain_3h <= 25:
+        return ("Mưa to", "#f97316")     # Orange
+    else:
+        return ("Mưa rất to", "#ef4444") # Red
+
+
+def get_tide_level(tide: float) -> tuple[str, str]:
+    """
+    Get tide level label and color based on tide height.
+    
+    Returns:
+        tuple of (label, color)
+    """
+    if tide < 1.0:
+        return ("Thấp", "#22c55e")       # Green
+    elif tide < 1.4:
+        return ("Trung bình", "#eab308") # Yellow
+    elif tide < 1.7:
+        return ("Cao", "#f97316")        # Orange
+    else:
+        return ("Rất cao", "#ef4444")    # Red
+
+
+@router.get("/weather/current", response_model=WeatherResponse)
+async def get_current_weather():
+    """
+    Get current weather (rain and tide) data.
+    
+    Returns current rainfall and tide level with Vietnamese labels.
+    """
+    from .WeatherService import RainFetcher, TideFetcher
+    from datetime import datetime, timezone
+    
+    try:
+        # Initialize fetchers
+        rain_fetcher = RainFetcher()
+        tide_fetcher = TideFetcher(config.TIDE_DATA_PATH)
+        
+        # Fetch current data (hour 0)
+        rain_data = rain_fetcher.fetch(time_context=0)
+        tide_data = tide_fetcher.fetch(time_context=0)
+        
+        rain_3h = rain_data.get("total_rain_3h", 0)
+        tide = tide_data.get("tide_now", 1.0)
+        tide_delta = tide_data.get("tide_delta", 0)
+        
+        rain_level, rain_color = get_rain_level(rain_3h)
+        tide_level, tide_color = get_tide_level(tide)
+        
+        return WeatherResponse(
+            hour=0,
+            weather=WeatherData(
+                rain_3h=round(rain_3h, 2),
+                rain_level=rain_level,
+                rain_color=rain_color,
+                tide=round(tide, 2),
+                tide_level=tide_level,
+                tide_color=tide_color,
+                tide_delta=round(tide_delta, 2),
+                timestamp=datetime.now(timezone.utc).isoformat()
+            )
+        )
+    except Exception as e:
+        logger.error(f"Error fetching current weather: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/weather/{hour}", response_model=WeatherResponse)
+async def get_future_weather(hour: int):
+    """
+    Get weather forecast for a specific hour ahead.
+    
+    Args:
+        hour: Hours ahead (1-12)
+        
+    Returns:
+        Weather data for the specified future hour.
+    """
+    if hour < 1 or hour > 12:
+        raise HTTPException(
+            status_code=400,
+            detail="Hour must be between 1 and 12"
+        )
+    
+    from .WeatherService import RainFetcher, TideFetcher
+    from datetime import datetime, timezone
+    
+    try:
+        # Initialize fetchers
+        rain_fetcher = RainFetcher()
+        tide_fetcher = TideFetcher(config.TIDE_DATA_PATH)
+        
+        # Fetch future data
+        rain_data = rain_fetcher.fetch(time_context=hour)
+        tide_data = tide_fetcher.fetch(time_context=hour)
+        
+        rain_3h = rain_data.get("total_rain_3h", 0)
+        tide = tide_data.get("tide_now", 1.0)
+        tide_delta = tide_data.get("tide_delta", 0)
+        
+        rain_level, rain_color = get_rain_level(rain_3h)
+        tide_level, tide_color = get_tide_level(tide)
+        
+        return WeatherResponse(
+            hour=hour,
+            weather=WeatherData(
+                rain_3h=round(rain_3h, 2),
+                rain_level=rain_level,
+                rain_color=rain_color,
+                tide=round(tide, 2),
+                tide_level=tide_level,
+                tide_color=tide_color,
+                tide_delta=round(tide_delta, 2),
+                timestamp=datetime.now(timezone.utc).isoformat()
+            )
+        )
+    except Exception as e:
+        logger.error(f"Error fetching weather for hour {hour}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
