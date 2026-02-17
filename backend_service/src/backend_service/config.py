@@ -33,7 +33,8 @@ OPENROUTE_BASE_URL = os.getenv("OPENROUTE_BASE_URL", "https://api.openrouteservi
 
 # Camera Dataset Configuration
 # CAMERA_DATASET_PATH = Path(os.getenv("CAMERA_DATASET_PATH", "dataset/dataset_camera_day_du.csv"))
-CAMERA_DATASET_PATH = project_root / "dataset" / "dataset_camera_day_du2.csv"
+# CAMERA_DATASET_PATH = project_root / "dataset" / "dataset_camera_day_du2.csv"
+CAMERA_DATASET_PATH = project_root / "dataset" / "dataset_camera_30_zones.csv"
 
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

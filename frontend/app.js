@@ -917,25 +917,179 @@ function initPredictionTab() {
         showLoading(true);
         const predictions = await fetchPredictions(hour);
         updatePredictionUI(predictions);
+        // Also fetch weather forecast for this hour
+        await fetchFutureWeather(hour);
         showLoading(false);
     });
     
     // Refresh button
     refreshBtn.addEventListener('click', triggerRiskJob);
     
-    // Load initial predictions when tab is shown
+    // Load initial predictions and weather when tab is shown
     const inspectionTab = document.getElementById('tab-inspection');
     inspectionTab.addEventListener('click', async () => {
+        showLoading(true);
+        // Always fetch weather forecast when tab is clicked
+        await fetchFutureWeather(predictionState.currentHour);
+        // Fetch predictions if not already loaded
         if (predictionState.predictions.length === 0) {
-            showLoading(true);
             const predictions = await fetchPredictions(predictionState.currentHour);
             updatePredictionUI(predictions);
-            showLoading(false);
         }
+        showLoading(false);
     });
+}
+
+// ============================================================================
+// Weather Functionality
+// ============================================================================
+
+// Weather state
+const weatherState = {
+    currentWeather: null,
+    forecastWeather: null,
+    lastFetch: null
+};
+
+// Get badge class based on rain level
+function getRainBadgeClass(level) {
+    const levelMap = {
+        'Không mưa': '',
+        'Mưa nhẹ': 'rain-light',
+        'Mưa vừa': 'rain-moderate',
+        'Mưa to': 'rain-heavy',
+        'Mưa rất to': 'rain-very-heavy'
+    };
+    return levelMap[level] || '';
+}
+
+// Get badge class based on tide level
+function getTideBadgeClass(level) {
+    const levelMap = {
+        'Thấp': 'tide-low',
+        'Trung bình': 'tide-medium',
+        'Cao': 'tide-high',
+        'Rất cao': 'tide-very-high'
+    };
+    return levelMap[level] || 'tide-low';
+}
+
+// Fetch current weather
+async function fetchCurrentWeather() {
+    try {
+        const response = await fetch(`${BACKEND_URL}/weather/current`);
+        if (!response.ok) throw new Error('Failed to fetch current weather');
+        
+        const data = await response.json();
+        weatherState.currentWeather = data;
+        weatherState.lastFetch = new Date();
+        
+        updateCurrentWeatherUI(data);
+        return data;
+    } catch (error) {
+        console.error('Error fetching current weather:', error);
+        return null;
+    }
+}
+
+// Fetch future weather for a specific hour
+async function fetchFutureWeather(hour) {
+    try {
+        const response = await fetch(`${BACKEND_URL}/weather/${hour}`);
+        if (!response.ok) throw new Error(`Failed to fetch weather for hour ${hour}`);
+        
+        const data = await response.json();
+        weatherState.forecastWeather = data;
+        
+        updateForecastWeatherUI(data);
+        return data;
+    } catch (error) {
+        console.error(`Error fetching weather for hour ${hour}:`, error);
+        return null;
+    }
+}
+
+// Update current weather UI (top right widget)
+function updateCurrentWeatherUI(data) {
+    if (!data || !data.weather) {
+        document.getElementById('current-rain').textContent = '--';
+        document.getElementById('current-tide').textContent = '--';
+        document.getElementById('rain-badge').textContent = '--';
+        document.getElementById('tide-badge').textContent = '--';
+        return;
+    }
+    
+    const weather = data.weather;
+    
+    // Update rain
+    document.getElementById('current-rain').textContent = weather.rain_3h.toFixed(1);
+    const rainBadge = document.getElementById('rain-badge');
+    rainBadge.textContent = weather.rain_level;
+    rainBadge.className = 'weather-badge ' + getRainBadgeClass(weather.rain_level);
+    rainBadge.style.background = `${weather.rain_color}33`;  // 20% opacity
+    rainBadge.style.color = weather.rain_color;
+    
+    // Update tide
+    document.getElementById('current-tide').textContent = weather.tide.toFixed(2);
+    const tideBadge = document.getElementById('tide-badge');
+    tideBadge.textContent = weather.tide_level;
+    tideBadge.className = 'weather-badge ' + getTideBadgeClass(weather.tide_level);
+    tideBadge.style.background = `${weather.tide_color}33`;  // 20% opacity
+    tideBadge.style.color = weather.tide_color;
+}
+
+// Update forecast weather UI (in inspection tab)
+function updateForecastWeatherUI(data) {
+    const forecastRain = document.getElementById('forecast-rain');
+    const forecastTide = document.getElementById('forecast-tide');
+    const forecastRainBadge = document.getElementById('forecast-rain-badge');
+    const forecastTideBadge = document.getElementById('forecast-tide-badge');
+    
+    if (!data || !data.weather) {
+        if (forecastRain) forecastRain.textContent = '--';
+        if (forecastTide) forecastTide.textContent = '--';
+        if (forecastRainBadge) forecastRainBadge.textContent = '--';
+        if (forecastTideBadge) forecastTideBadge.textContent = '--';
+        return;
+    }
+    
+    const weather = data.weather;
+    
+    // Update rain forecast
+    if (forecastRain) {
+        forecastRain.textContent = weather.rain_3h.toFixed(1);
+    }
+    if (forecastRainBadge) {
+        forecastRainBadge.textContent = weather.rain_level;
+        forecastRainBadge.className = 'forecast-badge ' + getRainBadgeClass(weather.rain_level);
+        forecastRainBadge.style.background = `${weather.rain_color}33`;
+        forecastRainBadge.style.color = weather.rain_color;
+    }
+    
+    // Update tide forecast
+    if (forecastTide) {
+        forecastTide.textContent = weather.tide.toFixed(2);
+    }
+    if (forecastTideBadge) {
+        forecastTideBadge.textContent = weather.tide_level;
+        forecastTideBadge.className = 'forecast-badge ' + getTideBadgeClass(weather.tide_level);
+        forecastTideBadge.style.background = `${weather.tide_color}33`;
+        forecastTideBadge.style.color = weather.tide_color;
+    }
+}
+
+// Initialize weather
+function initWeather() {
+    // Fetch current weather on load
+    fetchCurrentWeather();
+    
+    // Refresh current weather every 5 minutes
+    setInterval(fetchCurrentWeather, 5 * 60 * 1000);
 }
 
 // Add to DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     initPredictionTab();
+    initWeather();
 });
+
