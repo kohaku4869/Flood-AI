@@ -131,6 +131,82 @@ Calculate a safe route avoiding flooded areas detected by cameras.
 - `404 Not Found`: No route found between points
 - `500 Internal Server Error`: Server error
 
+### Flood Status
+
+**Endpoint:** `GET /flood-status`
+
+Returns the current flood status of all cameras.
+
+**Response (200 OK):**
+
+```json
+{
+  "test_mode": false,
+  "total_cameras": 696,
+  "flooded_count": 5,
+  "cameras": [
+    {
+      "id": "59d3524f02eb490011a0a61b",
+      "name": "Trần Quang Khải - Trần Khắc Chân",
+      "is_flooded": true,
+      "coords": {"lat": 10.8655019, "lng": 106.7931067},
+      "last_check": "2024-05-20T10:00:00"
+    }
+  ]
+}
+```
+
+### Test Flood Mode
+
+**Enable:** `POST /test-flood/enable`
+
+Turns on test mode, randomly marking ~40% of cameras as flooded for demo purposes.
+
+```json
+{
+  "test_mode": true,
+  "message": "Test mode enabled. 278 cameras marked as flooded.",
+  "flooded_count": 278
+}
+```
+
+**Disable:** `POST /test-flood/disable`
+
+Turns off test mode, returns to real AI detection and triggers an immediate flood check.
+
+```json
+{
+  "test_mode": false,
+  "message": "Test mode disabled. Using real flood status.",
+  "flooded_count": 0
+}
+```
+
+### Flood Check Trigger
+
+**Endpoint:** `POST /flood-check/trigger`
+
+Forces an immediate flood status update for all cameras (bypasses the scheduled interval). Cannot be used while test mode is active.
+
+```json
+{
+  "status": "success",
+  "message": "Flood check triggered",
+  "flooded_count": 5
+}
+```
+
+### Camera Image
+
+**Endpoint:** `GET /camera/{camera_id}/image`
+
+Fetches the latest JPEG snapshot from a specific traffic camera.
+
+- **Response:** `image/jpeg` binary data
+- **Cache:** 30 seconds (`Cache-Control: public, max-age=30`)
+- **404:** Camera image not available
+- **Example:** `GET /camera/59d3524f02eb490011a0a61b/image`
+
 ## 🧪 Testing
 
 ### Unit Tests
