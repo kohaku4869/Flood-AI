@@ -7,7 +7,13 @@ authors = [
     { name = "kohaku4869" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "langchain>=1.2.10",
+    "langgraph>=1.0.8",
+    "matplotlib>=3.10.8",
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+]
 
 [project.scripts]
 agent-service = "agent_service:main"
