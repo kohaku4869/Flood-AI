@@ -8,11 +8,15 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.123.9",
+    "httpx>=0.28.1",
     "langchain>=1.2.10",
+    "langchain-google-genai>=4.2.1",
     "langgraph>=1.0.8",
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
+    "uvicorn>=0.38.0",
 ]
 
 [project.scripts]

@@ -1,5 +1,10 @@
 // Configuration
 const BACKEND_URL = 'http://localhost:5000';
+const AGENT_URL = 'http://localhost:8001';
+
+// FastAPI WebSocket
+const WS_URL = AGENT_URL.replace(/^http/, 'ws') + '/ws/frontend';
+const socket = new WebSocket(WS_URL);
 
 // State
 const state = {
@@ -1093,3 +1098,307 @@ document.addEventListener('DOMContentLoaded', () => {
     initWeather();
 });
 
+socket.onopen = () => {
+    console.log("WebSocket connection opened");
+}
+socket.onmessage = (event) => {
+    try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'set_route_and_find') {
+            handleSetRouteAndFind(data);
+        }
+    } catch (e) {
+        console.error('WebSocket message parse error:', e);
+    }
+}
+socket.onclose = () => {
+    console.log("WebSocket connection closed");
+}
+socket.onerror = (error) => {
+    console.error("WebSocket error:", error);
+}
+
+function handleSetRouteAndFind(data) {
+    // 1. Set Start Point
+    if (data.start && data.start.lat && data.start.lng) {
+        setPoint(data.start, 'start');
+    }
+
+    // 2. Set End Point
+    if (data.end && data.end.lat && data.end.lng) {
+        setPoint(data.end, 'end');
+    }
+
+    // 3. Trigger Find Route
+    if (state.startPoint && state.endPoint) {
+        console.log("Agent triggering findRoute...");
+        setTimeout(() => {
+            findRoute();
+        }, 100);
+    }
+}
+
+// ============================================================================
+// Chat Widget — Agent Service Integration
+// ============================================================================
+
+const chatState = {
+    isOpen: false,
+    isStreaming: false,
+    currentAssistantBubble: null,
+    currentAssistantText: '',
+};
+
+function initChat() {
+    const toggleBtn = document.getElementById('chat-toggle');
+    const closeBtn = document.getElementById('chat-close');
+    const resetBtn = document.getElementById('chat-reset');
+    const sendBtn = document.getElementById('chat-send');
+    const input = document.getElementById('chat-input');
+
+    toggleBtn.addEventListener('click', toggleChat);
+    closeBtn.addEventListener('click', toggleChat);
+    resetBtn.addEventListener('click', resetChat);
+    sendBtn.addEventListener('click', () => sendChatMessage());
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage();
+        }
+    });
+}
+
+function toggleChat() {
+    const panel = document.getElementById('chat-panel');
+    const btn = document.getElementById('chat-toggle');
+    chatState.isOpen = !chatState.isOpen;
+
+    if (chatState.isOpen) {
+        panel.classList.remove('hidden');
+        btn.classList.add('active');
+        document.getElementById('chat-input').focus();
+    } else {
+        panel.classList.add('hidden');
+        btn.classList.remove('active');
+    }
+}
+
+function scrollChatToBottom() {
+    const container = document.getElementById('chat-messages');
+    container.scrollTop = container.scrollHeight;
+}
+
+function appendUserMessage(text) {
+    const container = document.getElementById('chat-messages');
+    // Remove welcome if present
+    const welcome = container.querySelector('.chat-welcome');
+    if (welcome) welcome.remove();
+
+    const div = document.createElement('div');
+    div.className = 'chat-message user';
+    div.innerHTML = `<div class="chat-bubble">${escapeHtml(text)}</div>`;
+    container.appendChild(div);
+    scrollChatToBottom();
+}
+
+function createAssistantBubble() {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-message assistant';
+    div.innerHTML = `<div class="chat-bubble"></div>`;
+    container.appendChild(div);
+    chatState.currentAssistantBubble = div.querySelector('.chat-bubble');
+    chatState.currentAssistantText = '';
+    scrollChatToBottom();
+    return div;
+}
+
+function appendToolIndicator(name) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-tool-indicator';
+    div.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+        </svg>
+        <span>Đang sử dụng <span class="chat-tool-name">${escapeHtml(name)}</span>...</span>
+    `;
+    container.appendChild(div);
+    scrollChatToBottom();
+}
+
+function showTypingIndicator() {
+    const container = document.getElementById('chat-messages');
+    // Remove existing typing indicator
+    const existing = container.querySelector('.chat-typing');
+    if (existing) return;
+
+    const div = document.createElement('div');
+    div.className = 'chat-typing';
+    div.innerHTML = `
+        <div class="chat-typing-dot"></div>
+        <div class="chat-typing-dot"></div>
+        <div class="chat-typing-dot"></div>
+    `;
+    container.appendChild(div);
+    scrollChatToBottom();
+}
+
+function removeTypingIndicator() {
+    const container = document.getElementById('chat-messages');
+    const typing = container.querySelector('.chat-typing');
+    if (typing) typing.remove();
+}
+
+function appendErrorMessage(text) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-message error';
+    div.innerHTML = `<div class="chat-bubble">⚠️ ${escapeHtml(text)}</div>`;
+    container.appendChild(div);
+    scrollChatToBottom();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function setInputEnabled(enabled) {
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send');
+    input.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+    if (enabled) input.focus();
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || chatState.isStreaming) return;
+
+    // Show user message
+    appendUserMessage(text);
+    input.value = '';
+    chatState.isStreaming = true;
+    setInputEnabled(false);
+
+    // Show typing indicator
+    showTypingIndicator();
+
+    try {
+        const response = await fetch(`${AGENT_URL}/chat/stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let assistantDiv = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
+
+                try {
+                    const event = JSON.parse(jsonStr);
+
+                    switch (event.type) {
+                        case 'token':
+                            removeTypingIndicator();
+                            if (!chatState.currentAssistantBubble) {
+                                assistantDiv = createAssistantBubble();
+                            }
+                            chatState.currentAssistantText += event.content;
+                            chatState.currentAssistantBubble.textContent = chatState.currentAssistantText;
+                            scrollChatToBottom();
+                            break;
+
+                        case 'tool_call':
+                            removeTypingIndicator();
+                            // Finalize current bubble if exists
+                            if (chatState.currentAssistantBubble) {
+                                chatState.currentAssistantBubble = null;
+                            }
+                            if (event.name) {
+                                appendToolIndicator(event.name);
+                            }
+                            break;
+
+                        case 'tool_result':
+                            // After tool completes, show typing for the next response
+                            showTypingIndicator();
+                            break;
+
+                        case 'done':
+                            removeTypingIndicator();
+                            // Remove spinning tool indicators
+                            document.querySelectorAll('.chat-tool-indicator').forEach(el => {
+                                el.querySelector('svg')?.style.setProperty('animation', 'none');
+                            });
+                            chatState.currentAssistantBubble = null;
+                            break;
+
+                        case 'error':
+                            removeTypingIndicator();
+                            chatState.currentAssistantBubble = null;
+                            appendErrorMessage(event.content || 'Đã xảy ra lỗi.');
+                            break;
+                    }
+                } catch (parseErr) {
+                    console.warn('Chat SSE parse error:', parseErr, jsonStr);
+                }
+            }
+        }
+    } catch (err) {
+        removeTypingIndicator();
+        chatState.currentAssistantBubble = null;
+        appendErrorMessage(`Không thể kết nối tới agent: ${err.message}`);
+    } finally {
+        chatState.isStreaming = false;
+        chatState.currentAssistantBubble = null;
+        setInputEnabled(true);
+    }
+}
+
+async function resetChat() {
+    try {
+        await fetch(`${AGENT_URL}/reset`, { method: 'POST' });
+    } catch (err) {
+        console.warn('Failed to reset agent state:', err);
+    }
+
+    // Clear messages UI
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = `
+        <div class="chat-welcome">
+            <div class="chat-welcome-icon">🤖</div>
+            <p>Xin chào! Tôi là trợ lý Flood-AI.</p>
+            <p class="chat-welcome-sub">Hỏi tôi về tình trạng ngập, thời tiết, hoặc tìm đường đi an toàn.</p>
+        </div>
+    `;
+    chatState.currentAssistantBubble = null;
+    chatState.currentAssistantText = '';
+}
+
+// Initialize chat on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    initChat();
+});

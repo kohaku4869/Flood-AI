@@ -20,3 +20,4 @@ members = [
 [tool.uv.sources]
 ai-service = { workspace = true }
 backend-service = { workspace = true }
+agent-service = { workspace = true }
