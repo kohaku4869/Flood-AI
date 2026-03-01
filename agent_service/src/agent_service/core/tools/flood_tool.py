@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import httpx
 import re
@@ -14,6 +15,10 @@ from agent_service.core.tools.tool_des import (
     GeocodeInput,
     GetWeatherForecastInput,
     SetRouteInput,
+    GetFloodRiskPredictionInput,
+    ShowCameraImageInput,
+    GetSafeStreetsNearbyInput,
+    GetAreaFloodReportInput,
 )
 
 # ── Load & chuẩn hóa dataset ────────────────────────────────────────────────
@@ -271,6 +276,172 @@ async def set_route(start_coords: dict, end_coords: dict) -> str:
     return "Đã gửi lệnh tìm đường tới bản đồ."
 
 
+async def get_flood_risk_prediction(street_name: str, hour: int) -> dict:
+    """Lấy mức độ rủi ro ngập chi tiết (risk score) cho đường cụ thể sau N giờ."""
+    if hour < 1 or hour > 12:
+        return {"error": "hour phải từ 1 đến 12."}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{BACKEND_URL}/predictions/{hour}",
+                timeout=15,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except Exception as e:
+        return {"error": f"Không thể lấy dữ liệu dự báo rủi ro: {str(e)}"}
+
+    query = _normalize(street_name)
+    cameras = data.get("cameras", [])
+    matched = [
+        cam for cam in cameras
+        if query in _normalize(cam.get("name", ""))
+    ]
+
+    if not matched:
+        return {"found": False, "message": f"Không tìm thấy camera nào trên đường '{street_name}'."}
+
+    results = []
+    for cam in matched:
+        results.append({
+            "street_name": cam.get("name"),
+            "risk": round(cam.get("risk", 0), 2),
+            "risk_level": cam.get("risk_level", "low"),
+        })
+
+    return {"hour": hour, "count": len(results), "cameras": results}
+
+
+async def get_flood_risk_summary() -> dict:
+    """Lấy tóm tắt rủi ro ngập 12 giờ tới — số đường nguy hiểm mỗi giờ."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{BACKEND_URL}/predictions/summary",
+                timeout=15,
+            )
+            response.raise_for_status()
+            data = response.json()
+    except Exception as e:
+        return {"error": f"Không thể lấy tóm tắt dự báo: {str(e)}"}
+
+    summary = data.get("summary", [])
+    if not summary:
+        return {"message": "Chưa có dữ liệu dự báo rủi ro. Hệ thống có thể chưa chạy job tính toán."}
+
+    results = []
+    for s in summary:
+        results.append({
+            "hour": s.get("hour"),
+            "high_risk": s.get("high_risk", 0),
+            "medium_risk": s.get("medium_risk", 0),
+        })
+
+    return {"summary": results}
+
+
+async def show_camera_image(street_name: str) -> str:
+    """Hiển thị hình ảnh camera giao thông của đường lên bản đồ."""
+    results = _search_cameras(street_name)
+
+    if results.empty:
+        return f"Không tìm thấy camera nào trên đường '{street_name}'."
+
+    cam_id = results.iloc[0]["CamId"]
+    cam_name = results.iloc[0]["Street_Name"]
+    await manager.show_camera_image(cam_id, cam_name)
+    return f"Đã gửi hình ảnh camera tại {cam_name} lên bản đồ."
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Tính khoảng cách Haversine giữa 2 toạ độ (trả về km)."""
+    R = 6371  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+async def get_safe_streets_nearby(address: str, radius_km: float = 2.0) -> dict:
+    """Tìm các đường an toàn (không ngập) trong bán kính quanh một địa chỉ."""
+    # 1. Geocode địa chỉ
+    geo = await geocode_address(address)
+    if "error" in geo or geo.get("found") is False:
+        return {"error": f"Không thể xác định toạ độ cho '{address}'."}
+
+    center_lat = geo["lat"]
+    center_lng = geo["lng"]
+
+    # 2. Lấy danh sách đường ngập
+    flood_data = await get_all_flooded_streets()
+    flooded_set = set()
+    for name in flood_data.get("flooded_streets", []):
+        flooded_set.add(_normalize(name))
+
+    # 3. Lọc cameras trong bán kính + không ngập
+    safe = []
+    seen_streets = set()
+    for _, row in df.iterrows():
+        cam_lat = row.get("Latitude", 0)
+        cam_lng = row.get("Longitude", 0)
+        street = row["Street_Name"]
+        street_norm = _normalize(street)
+
+        if street_norm in seen_streets:
+            continue
+
+        dist = _haversine_km(center_lat, center_lng, cam_lat, cam_lng)
+        if dist <= radius_km and street_norm not in flooded_set:
+            safe.append({"street_name": street, "distance_km": round(dist, 1)})
+            seen_streets.add(street_norm)
+
+    safe.sort(key=lambda x: x["distance_km"])
+    return {
+        "center": geo.get("address", address),
+        "radius_km": radius_km,
+        "safe_count": len(safe),
+        "safe_streets": safe[:15],  # Giới hạn 15 đường gần nhất
+    }
+
+
+async def get_area_flood_report(district: str) -> dict:
+    """Báo cáo tổng hợp tình hình ngập lụt theo quận/khu vực."""
+    query = _normalize(district)
+
+    # 1. Lọc cameras thuộc quận
+    area_cameras = []
+    for _, row in df.iterrows():
+        street_norm = _normalize(row["Street_Name"])
+        if query in street_norm:
+            area_cameras.append(row["Street_Name"])
+
+    if not area_cameras:
+        return {"found": False, "message": f"Không tìm thấy dữ liệu camera nào tại '{district}'."}
+
+    # 2. Lấy danh sách đường đang ngập
+    flood_data = await get_all_flooded_streets()
+    flooded_set = set()
+    for name in flood_data.get("flooded_streets", []):
+        flooded_set.add(_normalize(name))
+
+    # 3. Đối chiếu
+    flooded_in_area = [s for s in area_cameras if _normalize(s) in flooded_set]
+    safe_in_area = [s for s in area_cameras if _normalize(s) not in flooded_set]
+
+    # 4. Lấy thời tiết
+    weather = await get_current_condition()
+
+    return {
+        "district": district,
+        "total_streets": len(area_cameras),
+        "flooded_count": len(flooded_in_area),
+        "flooded_streets": flooded_in_area,
+        "safe_count": len(safe_in_area),
+        "weather": weather,
+    }
+
+
 # ── StructuredTools ──────────────────────────────────────────────────────────
 
 get_camera_status_tool = StructuredTool.from_function(
@@ -327,6 +498,40 @@ set_route_tool = StructuredTool.from_function(
     args_schema=SetRouteInput,
 )
 
+get_flood_risk_prediction_tool = StructuredTool.from_function(
+    coroutine=get_flood_risk_prediction,
+    name="get_flood_risk_prediction",
+    description="Lấy mức độ rủi ro ngập chi tiết (risk score 0-1) cho đường cụ thể sau N giờ. Khác get_camera_future_status vì trả risk score thay vì chỉ Yes/No.",
+    args_schema=GetFloodRiskPredictionInput,
+)
+
+get_flood_risk_summary_tool = StructuredTool.from_function(
+    coroutine=get_flood_risk_summary,
+    name="get_flood_risk_summary",
+    description="Tóm tắt rủi ro ngập 12 giờ tới — số đường rủi ro cao và trung bình mỗi giờ. Dùng khi user hỏi tổng quan rủi ro ngập.",
+)
+
+show_camera_image_tool = StructuredTool.from_function(
+    coroutine=show_camera_image,
+    name="show_camera_image",
+    description="Hiển thị hình ảnh camera giao thông lên bản đồ. Dùng khi user muốn xem camera đường nào đó.",
+    args_schema=ShowCameraImageInput,
+)
+
+get_safe_streets_nearby_tool = StructuredTool.from_function(
+    coroutine=get_safe_streets_nearby,
+    name="get_safe_streets_nearby",
+    description="Tìm các đường an toàn (không ngập) trong bán kính quanh một địa chỉ. Dùng khi user hỏi 'đường nào an toàn quanh đây'.",
+    args_schema=GetSafeStreetsNearbyInput,
+)
+
+get_area_flood_report_tool = StructuredTool.from_function(
+    coroutine=get_area_flood_report,
+    name="get_area_flood_report",
+    description="Báo cáo tổng hợp ngập lụt theo quận/khu vực: số đường ngập, danh sách, thời tiết. Dùng khi user hỏi tình hình ngập ở một quận.",
+    args_schema=GetAreaFloodReportInput,
+)
+
 # ── Exports dùng cho agent_node và tool_node ─────────────────────────────────
 
 TOOLS = [
@@ -338,6 +543,11 @@ TOOLS = [
     get_weather_forecast_tool,
     geocode_address_tool,
     set_route_tool,
+    get_flood_risk_prediction_tool,
+    get_flood_risk_summary_tool,
+    show_camera_image_tool,
+    get_safe_streets_nearby_tool,
+    get_area_flood_report_tool,
 ]
 
 TOOL_MAP = {tool.name: tool for tool in TOOLS}

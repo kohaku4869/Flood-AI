@@ -1106,6 +1106,8 @@ socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'set_route_and_find') {
             handleSetRouteAndFind(data);
+        } else if (data.type === 'show_camera_image') {
+            handleShowCameraImage(data);
         }
     } catch (e) {
         console.error('WebSocket message parse error:', e);
@@ -1135,6 +1137,29 @@ function handleSetRouteAndFind(data) {
         setTimeout(() => {
             findRoute();
         }, 100);
+    }
+}
+
+function handleShowCameraImage(data) {
+    const cameraId = data.camera_id;
+    const streetName = data.street_name || 'Camera';
+    const imageUrl = `${BACKEND_URL}/camera/${cameraId}/image`;
+
+    // Hiển thị ảnh camera trong chat như một message
+    const container = document.getElementById('chat-messages');
+    if (container) {
+        const div = document.createElement('div');
+        div.className = 'chat-message assistant';
+        div.innerHTML = `
+            <div class="chat-bubble" style="padding: 8px;">
+                <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px;">📷 ${streetName}</div>
+                <img src="${imageUrl}" alt="Camera ${streetName}"
+                     style="width: 100%; border-radius: 8px; cursor: pointer;"
+                     onerror="this.alt='Không tải được ảnh camera'; this.style.padding='20px';"
+                     onclick="window.open('${imageUrl}', '_blank')">
+            </div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
     }
 }
 
