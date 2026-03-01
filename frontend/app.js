@@ -157,7 +157,7 @@ async function findRoute() {
                 case 'clear': return '#00D000';      // Green
                 case 'moderate': return '#FFD700';   // Yellow/Gold
                 case 'heavy': return '#FF0000';      // Red
-                default: return '#667eea';           // Blue (no traffic data)
+                default: return '#0ea5e9';           // Blue (no traffic data)
             }
         };
         

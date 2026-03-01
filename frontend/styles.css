@@ -9,9 +9,9 @@
   --color-bg-elevated: #1e2442;
   
   /* Accent Colors */
-  --color-accent-primary: #667eea;
-  --color-accent-secondary: #764ba2;
-  --color-accent-tertiary: #5a67d8;
+  --color-accent-primary: #0ea5e9;
+  --color-accent-secondary: #0284c7;
+  --color-accent-tertiary: #0369a1;
   
   /* Text Colors */
   --color-text-primary: #e2e8f0;
@@ -28,8 +28,8 @@
   /* Functional Colors */
   --color-start: #48bb78;
   --color-end: #fc8181;
-  --color-camera: #667eea;
-  --color-flood: #4299e1;
+  --color-camera: #0ea5e9;
+  --color-flood: #38bdf8;
   
   /* Border & Divider */
   --color-border: rgba(255, 255, 255, 0.1);
@@ -39,11 +39,11 @@
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+  --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
   
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --gradient-secondary: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+  --gradient-secondary: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   --gradient-success: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
   
   /* Spacing */
@@ -297,7 +297,7 @@ body {
 
 .input-group:focus-within {
   border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
 }
 
 .input-icon {
@@ -1147,8 +1147,8 @@ body {
 }
 
 .camera-icon-normal {
-  color: #667eea;
-  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+  color: #0ea5e9;
+  filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.6));
 }
 
 .camera-icon-invalid {
@@ -1801,14 +1801,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.4);
   transition: all var(--transition-base);
   z-index: 2100;
 }
 
 .chat-toggle-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 28px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 28px rgba(14, 165, 233, 0.6);
 }
 
 .chat-toggle-btn.active {
@@ -1875,7 +1875,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(3, 105, 161, 0.15) 100%);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -2036,8 +2036,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(102, 126, 234, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.2);
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: var(--radius-md);
   font-size: 12px;
   color: var(--color-accent-primary);
@@ -2133,7 +2133,7 @@ body {
 
 .chat-send-btn:hover {
   transform: scale(1.05);
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 12px rgba(14, 165, 233, 0.4);
 }
 
 .chat-send-btn:disabled {
