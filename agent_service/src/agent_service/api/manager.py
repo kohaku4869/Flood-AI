@@ -15,4 +15,8 @@ class ConnectionManager:
         for connection in self.active_connections:
             await connection.send_json({"type": "set_route_and_find", "start": start, "end": end})
 
+    async def show_camera_image(self, camera_id: str, street_name: str):
+        for connection in self.active_connections:
+            await connection.send_json({"type": "show_camera_image", "camera_id": camera_id, "street_name": street_name})
+
 manager = ConnectionManager()

@@ -25,3 +25,21 @@ class GetWeatherForecastInput(BaseModel):
 class SetRouteInput(BaseModel):
     start_coords: dict = Field(description="Toạ độ điểm xuất phát, dạng {lat: float, lng: float}")
     end_coords: dict = Field(description="Toạ độ điểm đến, dạng {lat: float, lng: float}")
+
+
+class GetFloodRiskPredictionInput(BaseModel):
+    street_name: str = Field(description="Tên đường cần xem mức độ rủi ro ngập")
+    hour: int = Field(description="Số giờ trong tương lai (1-12)")
+
+
+class ShowCameraImageInput(BaseModel):
+    street_name: str = Field(description="Tên đường cần xem hình ảnh camera")
+
+
+class GetSafeStreetsNearbyInput(BaseModel):
+    address: str = Field(description="Tên đường hoặc địa chỉ trung tâm cần tìm đường an toàn xung quanh")
+    radius_km: float = Field(default=2.0, description="Bán kính tìm kiếm tính bằng km (mặc định 2km)")
+
+
+class GetAreaFloodReportInput(BaseModel):
+    district: str = Field(description="Tên quận/khu vực cần xem báo cáo ngập (ví dụ: 'Bình Thạnh', 'Quận 7')")
