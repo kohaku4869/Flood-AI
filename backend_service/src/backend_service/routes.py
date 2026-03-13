@@ -258,7 +258,24 @@ async def get_camera_image(camera_id: str):
     from .get_image import create_session, get_image_by_id
     
     try:
+        # Check if in test mode and camera is flooded
+        flood_manager = get_flood_state_manager()
+        if flood_manager.test_mode:
+            all_states = flood_manager.get_all_states()
+            cam_state = next((s for s in all_states if s["camera_id"] == camera_id), None)
+            
+            if cam_state and cam_state["is_flooded"]:
+                from .get_image import get_random_flood_image
+                image_data, is_valid = get_random_flood_image()
+                if image_data:
+                    return Response(
+                        content=image_data,
+                        media_type="image/jpeg",
+                        headers={"Cache-Control": "no-cache"}
+                    )
+
         # Create session and fetch image (returns tuple: image_bytes, is_valid)
+        from .get_image import create_session, get_image_by_id
         session = create_session()
         image_result = get_image_by_id(session, camera_id)
         

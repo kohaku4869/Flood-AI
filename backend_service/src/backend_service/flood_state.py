@@ -45,6 +45,7 @@ class FloodStateManager:
         self._states: Dict[str, CameraFloodState] = {}
         self._test_mode: bool = False
         self._test_flooded_ids: set = set()
+        self._test_metadata: Dict[str, Dict] = {}  # Store test-specific metadata
         self._state_lock = threading.RLock()
         self._initialized = True
         logger.info("FloodStateManager initialized")
@@ -133,19 +134,28 @@ class FloodStateManager:
         with self._state_lock:
             states = []
             for cam_id, state in self._states.items():
-                is_flooded = (
-                    cam_id in self._test_flooded_ids 
-                    if self._test_mode 
-                    else state.is_flooded
-                )
+                is_flooded = cam_id in self._test_flooded_ids if self._test_mode else state.is_flooded
+                
+                # Use test metadata if in test mode
+                confidence = state.confidence
+                last_checked = state.last_checked
+                
+                if self._test_mode:
+                    if is_flooded:
+                        test_info = self._test_metadata.get(cam_id, {})
+                        confidence = test_info.get('confidence', 0.95)
+                        last_checked = test_info.get('last_checked', state.last_checked)
+                    else:
+                        confidence = 0.05
+                
                 states.append({
                     "camera_id": cam_id,
-                    "name": state.street_name or cam_id,  # Use street_name as name, fallback to camera_id
+                    "name": state.street_name or cam_id,
                     "is_flooded": is_flooded,
                     "is_valid": state.is_valid,
                     "coords": state.coords,
-                    "last_checked": state.last_checked.isoformat() if state.last_checked else None,
-                    "confidence": state.confidence if not self._test_mode else (0.95 if is_flooded else 0.05)
+                    "last_checked": last_checked.isoformat() if last_checked else None,
+                    "confidence": confidence
                 })
             return states
     
@@ -164,6 +174,20 @@ class FloodStateManager:
             all_ids = list(self._states.keys())
             num_flooded = int(len(all_ids) * flood_percentage)
             self._test_flooded_ids = set(random.sample(all_ids, num_flooded))
+            
+            # Generate random metadata for flooded cameras
+            # Accuracy 90-100%, Time -5 to -1 minutes
+            from datetime import timedelta
+            self._test_metadata = {}
+            for cam_id in self._test_flooded_ids:
+                confidence = random.uniform(0.90, 1.00)
+                minutes_ago = random.uniform(1, 5)
+                last_checked = datetime.now() - timedelta(minutes=minutes_ago)
+                self._test_metadata[cam_id] = {
+                    "confidence": confidence,
+                    "last_checked": last_checked
+                }
+                
             logger.info(f"Test mode enabled: {num_flooded} cameras marked as flooded")
             return num_flooded
     

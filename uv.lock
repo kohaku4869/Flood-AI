@@ -659,6 +659,7 @@ name = "flood-ai"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "agent-service" },
     { name = "ai-service" },
     { name = "backend-service" },
     { name = "numpy" },
@@ -666,6 +667,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-service", editable = "agent_service" },
     { name = "ai-service", editable = "ai_service" },
     { name = "backend-service", editable = "backend_service" },
     { name = "numpy", specifier = ">=2.3.5" },

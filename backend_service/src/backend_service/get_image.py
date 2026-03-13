@@ -2,6 +2,7 @@
 Image retrieval module for fetching camera snapshots.
 """
 import requests
+import random
 import time
 import urllib3
 from requests.adapters import HTTPAdapter
@@ -160,3 +161,31 @@ def get_image_by_id(session, camera_id):
             return _invalid_image_bytes, False
         else:
             return None, False
+
+
+def get_random_flood_image():
+    """
+    Get a random image from the dataset/random_flood directory.
+    
+    Returns:
+        tuple: (image_bytes, True) or (None, False) if no images found
+    """
+    try:
+        random_flood_dir = Path(config.DATASET_DIR) / "random_flood"
+        if not random_flood_dir.exists():
+            logger.warning(f"Random flood directory not found at {random_flood_dir}")
+            return None, False
+            
+        images = list(random_flood_dir.glob("*.jpg")) + list(random_flood_dir.glob("*.png"))
+        if not images:
+            logger.warning(f"No images found in {random_flood_dir}")
+            return None, False
+            
+        random_image_path = random.choice(images)
+        with open(random_image_path, 'rb') as f:
+            image_data = f.read()
+            
+        return image_data, True
+    except Exception as e:
+        logger.error(f"Error fetching random flood image: {e}")
+        return None, False
