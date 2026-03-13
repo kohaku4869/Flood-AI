@@ -3,7 +3,7 @@ from agent_service.core.model.llm import LLM
 
 from agent_service.core.graph.state import AgentState
 from agent_service.core.tools.flood_tool import TOOLS
-from agent_service.core.utils.config import GEMINI_API_KEYS
+from agent_service.core.utils.config import GEMINI_API_KEYS, VERTEX_API_KEY, LLM_TYPE
 
 SYSTEM_PROMPT = """\
 # Vai trò
@@ -52,7 +52,10 @@ Bạn có quyền truy cập hệ thống camera giám sát ngập, dữ liệu 
 - Trả lời tự nhiên, thân thiện như đang tư vấn cho người dân."""
 
 
-llm = LLM(api_keys=GEMINI_API_KEYS, model="gemini-2.0-flash")
+# Sử dụng model gemini-2.0-flash cho cả Gemini và Vertex AI
+llm_model = "gemini-2.5-flash"
+api_keys = GEMINI_API_KEYS if LLM_TYPE == "gemini" else VERTEX_API_KEY
+llm = LLM(api_keys=api_keys, model=llm_model, llm_type=LLM_TYPE)
 llm_with_tools = llm.bind_tools(TOOLS)
 
 

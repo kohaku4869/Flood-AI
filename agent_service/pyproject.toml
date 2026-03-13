@@ -12,6 +12,7 @@ dependencies = [
     "httpx>=0.28.1",
     "langchain>=1.2.10",
     "langchain-google-genai>=4.2.1",
+    "langchain-google-vertexai>=3.2.2",
     "langgraph>=1.0.8",
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",

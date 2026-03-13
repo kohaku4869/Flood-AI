@@ -2,7 +2,7 @@ from typing import List
 from agent_service.core.utils.config import MAX_RETRIES
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
-
+from langchain_google_vertexai import ChatVertexAI
 
 class LLM:
     """
@@ -12,7 +12,7 @@ class LLM:
     """
 
     def __init__(self, api_keys: List[str], model: str,
-                 temperature: float = 0.5, max_tokens: int = 1024, top_p: float = 1.0):
+                 temperature: float = 0.5, max_tokens: int = 1024, top_p: float = 1.0,llm_type:str = "gemini"):
         if not api_keys or not isinstance(api_keys, list):
             raise ValueError("api_keys must be a non-empty list of strings.")
 
@@ -21,25 +21,39 @@ class LLM:
         self.temperature = temperature
         self.top_p = top_p
         self.max_tokens = max_tokens
+        self.llm_type = llm_type
 
         self.current_key_index = 0
         self._tools = None
         self._bound_llm = None
         self._create_llm_instance()
 
-        print(f"LLM class initialized for model '{model}' with {len(self.api_keys)} API keys.")
+        print(f"LLM class initialized {self.llm_type} for model '{model}' with {len(self.api_keys)} API keys.")
 
     def _create_llm_instance(self):
         """Tạo ChatGoogleGenerativeAI instance."""
         current_api_key = self.api_keys[self.current_key_index]
 
-        self.llm = ChatGoogleGenerativeAI(
-            api_key=current_api_key,
-            model=self.model,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            top_p=self.top_p,
-        )
+        if self.llm_type == "gemini":
+            self.llm = ChatGoogleGenerativeAI(
+                api_key=current_api_key,
+                model=self.model,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                top_p=self.top_p,
+            )
+        elif self.llm_type == "vertexai":
+            from agent_service.core.utils.config import GOOGLE_CLOUD_PROJECT, VERTEX_LOCATION
+            self.llm = ChatVertexAI(
+                model_name=self.model,
+                project=GOOGLE_CLOUD_PROJECT,
+                location=VERTEX_LOCATION,
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens,
+                top_p=self.top_p,
+            )
+        else:
+            raise ValueError(f"Unsupported llm_type: {self.llm_type}")
 
         # Nếu đã bind tools trước đó, bind lại trên instance mới
         if self._tools:

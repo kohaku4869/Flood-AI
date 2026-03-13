@@ -67,8 +67,13 @@ async def chat_stream(request: ChatRequest):
 
                             # Nội dung text từ AI
                             if msg.content:
-                                last_ai_content = msg.content
-                                yield f"data: {json.dumps({'type': 'token', 'content': msg.content}, ensure_ascii=False)}\n\n"
+                                # Đảm bảo content là string (Vertex AI có thể trả về list/dict)
+                                content_str = msg.content
+                                if isinstance(content_str, list):
+                                    content_str = "".join([c.get("text", "") if isinstance(c, dict) else str(c) for c in content_str])
+                                
+                                last_ai_content = content_str
+                                yield f"data: {json.dumps({'type': 'token', 'content': content_str}, ensure_ascii=False)}\n\n"
 
                     elif node_name == "tools":
                         for msg in messages:
