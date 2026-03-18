@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: flood_api_gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    # For linux/mac to resolve host.docker.internal to the host machine
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
