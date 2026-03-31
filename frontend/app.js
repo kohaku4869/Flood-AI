@@ -1,6 +1,7 @@
 // Configuration
 const BACKEND_URL = 'http://localhost:5000';
-const AGENT_URL = 'http://localhost:8001';
+const AGENT_URL   = 'http://localhost:8001';
+const AI_SERVICE_URL = 'http://localhost:8000'; // FastAPI AI service
 
 // FastAPI WebSocket
 const WS_URL = AGENT_URL.replace(/^http/, 'ws') + '/ws/frontend';
@@ -18,7 +19,8 @@ const state = {
     startMarker: null,
     endMarker: null,
     blockRadius: 150,  // Block radius in meters (will be updated from backend)
-    currentCameraPopup: null  // Currently open camera popup
+    currentCameraPopup: null,  // Currently open camera popup
+    floodTestMode: false  // Flood test mode: shows severity analysis in popups
 };
 
 // Global coordinate storage for autocomplete
@@ -336,6 +338,41 @@ function showCameraPopup(camera, marker) {
     const statusClass = camera.is_flooded ? 'flooded' : 'dry';
     const confidence = camera.confidence ? (camera.confidence * 100).toFixed(1) : 'N/A';
     const lastChecked = camera.last_checked ? new Date(camera.last_checked).toLocaleString('vi-VN') : 'Chưa kiểm tra';
+    const analysisPanelId = `severity-panel-${camera.camera_id}`;
+    const imageUrl = `${BACKEND_URL}/camera/${camera.camera_id}/image?t=${Date.now()}`;
+    
+    // Severity analysis card (visible only in test mode)
+    const severitySection = state.floodTestMode ? `
+        <div class="severity-analysis-card" id="${analysisPanelId}">
+            <div class="severity-analysis-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                </svg>
+                <span>Phân tích mức ngập</span>
+                <div class="severity-spinner" id="spinner-${camera.camera_id}"></div>
+            </div>
+            <div class="severity-result hidden" id="result-${camera.camera_id}">
+                <div class="severity-row">
+                    <span class="severity-badge-label">Mức độ:</span>
+                    <span class="severity-badge" id="badge-${camera.camera_id}">--</span>
+                </div>
+                <div class="severity-row">
+                    <span class="severity-badge-label">Độ phủ nước:</span>
+                    <span class="severity-coverage-text" id="coverage-${camera.camera_id}">--</span>
+                </div>
+                <div class="coverage-bar-wrap">
+                    <div class="coverage-bar-fill" id="bar-${camera.camera_id}" style="width:0%"></div>
+                </div>
+                <div class="severity-row" id="wheels-row-${camera.camera_id}" style="display:none">
+                    <span class="severity-badge-label">Bánh xe phát hiện:</span>
+                    <span id="wheels-${camera.camera_id}">0</span>
+                </div>
+                <div class="mask-preview-wrap">
+                    <img class="mask-preview" id="mask-${camera.camera_id}" alt="Water mask" />
+                </div>
+            </div>
+            <div class="severity-error hidden" id="sev-err-${camera.camera_id}">Không thể phân tích ảnh</div>
+        </div>` : '';
     
     // Build popup HTML
     const popupContent = `
@@ -348,7 +385,7 @@ function showCameraPopup(camera, marker) {
                 <img 
                     class="camera-popup-image" 
                     id="camera-img-${camera.camera_id}"
-                    src="${BACKEND_URL}/camera/${camera.camera_id}/image?t=${Date.now()}"
+                    src="${imageUrl}"
                     alt="Camera ${cameraName}"
                     onload="this.style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
                     onerror="this.style.display='none'; document.getElementById('error-${camera.camera_id}').style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
@@ -375,12 +412,13 @@ function showCameraPopup(camera, marker) {
                     <span class="metadata-value">${lastChecked}</span>
                 </div>
             </div>
+            ${severitySection}
         </div>
     `;
     
     // Create and open popup
     const popup = L.popup({
-        maxWidth: 400,
+        maxWidth: 420,
         className: 'custom-camera-popup'
     })
     .setLatLng([camera.coords.lat, camera.coords.lng])
@@ -389,6 +427,102 @@ function showCameraPopup(camera, marker) {
     
     // Store reference to current popup
     state.currentCameraPopup = popup;
+
+    // Trigger severity analysis after popup renders (only in test mode)
+    if (state.floodTestMode) {
+        setTimeout(() => analyzeCameraFloodSeverity(camera.camera_id, imageUrl), 300);
+    }
+}
+
+// ============================================================================
+// Flood Severity Analysis
+// ============================================================================
+
+/**
+ * Fetch the camera image, POST it to /analyze-severity, then populate
+ * the severity card that is already in the open popup DOM.
+ */
+async function analyzeCameraFloodSeverity(cameraId, imageUrl) {
+    const spinnerId  = `spinner-${cameraId}`;
+    const resultId   = `result-${cameraId}`;
+    const errId      = `sev-err-${cameraId}`;
+    const badgeId    = `badge-${cameraId}`;
+    const coverageId = `coverage-${cameraId}`;
+    const barId      = `bar-${cameraId}`;
+    const wheelsRowId= `wheels-row-${cameraId}`;
+    const wheelsId   = `wheels-${cameraId}`;
+    const maskId     = `mask-${cameraId}`;
+
+    const spinner  = document.getElementById(spinnerId);
+    const resultEl = document.getElementById(resultId);
+    const errEl    = document.getElementById(errId);
+    if (!resultEl) return; // popup closed before analysis finished
+
+    try {
+        // 1. Fetch image as blob
+        const imgResp = await fetch(imageUrl);
+        if (!imgResp.ok) throw new Error('Image fetch failed');
+        const blob = await imgResp.blob();
+
+        // 2. Build multipart form
+        const form = new FormData();
+        // Give the blob a proper filename so the server can validate the extension
+        const fileName = `camera_${cameraId}.jpg`;
+        form.append('file', blob, fileName);
+
+        // 3. POST to AI service
+        const resp = await fetch(`${AI_SERVICE_URL}/api/v1/analyze-severity`, {
+            method: 'POST',
+            body: form,
+        });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
+        const data = await resp.json();
+
+        if (!data.success) throw new Error('Analysis failed');
+
+        // 4. Populate UI elements
+        const badge    = document.getElementById(badgeId);
+        const coverage = document.getElementById(coverageId);
+        const bar      = document.getElementById(barId);
+        const wheelsRow= document.getElementById(wheelsRowId);
+        const wheelsEl = document.getElementById(wheelsId);
+        const maskImg  = document.getElementById(maskId);
+
+        if (!badge) return; // popup closed
+
+        // Severity badge
+        const severityMap = { None: 'sev-none', Low: 'sev-low', Medium: 'sev-medium', High: 'sev-high' };
+        badge.textContent = { None: 'Không ngập', Low: 'Nhẹ', Medium: 'Trung bình', High: 'Nặng' }[data.severity] || data.severity;
+        badge.className = 'severity-badge ' + (severityMap[data.severity] || '');
+
+        // Coverage bar
+        const pct = (data.coverage_ratio * 100).toFixed(1);
+        if (coverage) coverage.textContent = `${pct}%`;
+        if (bar) {
+            bar.style.width = `${Math.min(100, pct)}%`;
+            bar.className = 'coverage-bar-fill ' + (severityMap[data.severity] || '');
+        }
+
+        // Wheels
+        if (data.wheels_detected > 0 && wheelsRow && wheelsEl) {
+            wheelsRow.style.display = 'flex';
+            wheelsEl.textContent = data.wheels_detected;
+        }
+
+        // Water mask overlay
+        if (data.mask_b64 && maskImg) {
+            maskImg.src = `data:image/png;base64,${data.mask_b64}`;
+        }
+
+        // Show result, hide spinner
+        if (spinner) spinner.style.display = 'none';
+        if (resultEl) resultEl.classList.remove('hidden');
+
+    } catch (e) {
+        console.warn('Severity analysis error:', e);
+        if (spinner) spinner.style.display = 'none';
+        if (errEl) errEl.classList.remove('hidden');
+    }
 }
 
 // ============================================================================
@@ -641,12 +775,23 @@ document.addEventListener('DOMContentLoaded', () => {
         trafficLabel.title = 'Giao thông tự động hiển thị trên route';
     }
 
-    // Test Mode
+    // Test Mode – enable/disable flood simulation + boost weather display
     const toggleTest = document.getElementById('toggle-test-mode');
     toggleTest.addEventListener('change', async (e) => {
-        const endpoint = e.target.checked ? `${BACKEND_URL}/test-flood/enable` : `${BACKEND_URL}/test-flood/disable`;
-        await fetch(endpoint, { method: 'POST' });
+        const isOn = e.target.checked;
+        state.floodTestMode = isOn;
+
+        // Show/hide the hint about clicking cameras for severity analysis
+        const hint = document.getElementById('test-mode-hint');
+        if (hint) hint.classList.toggle('hidden', !isOn);
+
+        // 1. Tell backend to enable/disable flood simulation
+        const endpoint = isOn ? `${BACKEND_URL}/test-flood/enable` : `${BACKEND_URL}/test-flood/disable`;
+        await fetch(endpoint, { method: 'POST' }).catch(() => {});
         await fetchFloodStatus();
+
+        // 2. Boost (or restore) weather widget values for demo effect
+        applyWeatherBoost(isOn);
     });
 
     // Note: Input change handlers removed - now using autocomplete
@@ -1092,7 +1237,75 @@ function initWeather() {
     setInterval(fetchCurrentWeather, 5 * 60 * 1000);
 }
 
-// Add to DOMContentLoaded
+/**
+ * In flood test mode, override the weather widget to show raised rain/tide
+ * values for a more realistic demo. Restores real data when turned off.
+ */
+function applyWeatherBoost(isOn) {
+    if (isOn) {
+        // Simulated heavy-rain + high-tide scenario
+        const fakeWeather = {
+            rain_3h: 28.5,
+            rain_level: 'Mưa rất to',
+            rain_color: '#dc2626',
+            tide: 1.52,
+            tide_level: 'Rất cao',
+            tide_color: '#7c3aed',
+        };
+        _applyWeatherToWidget(fakeWeather);
+        _applyWeatherToForecast(fakeWeather);
+    } else {
+        // Restore real data if available
+        if (weatherState.currentWeather) {
+            updateCurrentWeatherUI(weatherState.currentWeather);
+        }
+        if (weatherState.forecastWeather) {
+            updateForecastWeatherUI(weatherState.forecastWeather);
+        }
+    }
+}
+
+/** Shared helper: write weather values into the top-right weather widget. */
+function _applyWeatherToWidget(w) {
+    const rainEl = document.getElementById('current-rain');
+    const tidEl  = document.getElementById('current-tide');
+    const rainBdg = document.getElementById('rain-badge');
+    const tideBdg = document.getElementById('tide-badge');
+    if (rainEl) rainEl.textContent = w.rain_3h.toFixed(1);
+    if (tidEl)  tidEl.textContent  = w.tide.toFixed(2);
+    if (rainBdg) {
+        rainBdg.textContent = w.rain_level;
+        rainBdg.style.background = `${w.rain_color}33`;
+        rainBdg.style.color = w.rain_color;
+    }
+    if (tideBdg) {
+        tideBdg.textContent = w.tide_level;
+        tideBdg.style.background = `${w.tide_color}33`;
+        tideBdg.style.color = w.tide_color;
+    }
+}
+
+/** Shared helper: write weather values into the inspection-tab forecast section. */
+function _applyWeatherToForecast(w) {
+    const rainEl  = document.getElementById('forecast-rain');
+    const tideEl  = document.getElementById('forecast-tide');
+    const rainBdg = document.getElementById('forecast-rain-badge');
+    const tideBdg = document.getElementById('forecast-tide-badge');
+    if (rainEl)  rainEl.textContent  = w.rain_3h.toFixed(1);
+    if (tideEl)  tideEl.textContent  = w.tide.toFixed(2);
+    if (rainBdg) {
+        rainBdg.textContent = w.rain_level;
+        rainBdg.style.background = `${w.rain_color}33`;
+        rainBdg.style.color = w.rain_color;
+    }
+    if (tideBdg) {
+        tideBdg.textContent = w.tide_level;
+        tideBdg.style.background = `${w.tide_color}33`;
+        tideBdg.style.color = w.tide_color;
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     initPredictionTab();
     initWeather();

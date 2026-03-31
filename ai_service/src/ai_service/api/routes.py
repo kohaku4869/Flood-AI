@@ -4,13 +4,19 @@ API routes for the flood classification service using FastAPI.
 This module defines FastAPI routers and endpoints for the AI service.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+import base64
+import io
+from typing import Dict, Any, Optional
+
+import cv2
+import numpy as np
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from pydantic import BaseModel
 import logging
-from typing import Dict, Any
 
 from ai_service.config import AppConfig
 from ai_service.core import FloodClassifier
+from ai_service.core.flood_severity import FloodSeverityEstimator, SeverityConfig
 from ai_service.utils import preprocess_image, validate_image_file
 
 logger = logging.getLogger(__name__)
@@ -193,3 +199,94 @@ async def health_check():
         raise HTTPException(status_code=503, detail=response)
     
     return response
+
+
+# Singleton severity estimator (default config, lazy-init OK since it has no heavy model)
+_severity_estimator: Optional[FloodSeverityEstimator] = None
+
+
+def _get_severity_estimator(
+    roi: float = 0.5,
+    low: float = 0.08,
+    medium: float = 0.25,
+    high: float = 0.50,
+) -> FloodSeverityEstimator:
+    """Return a (re)configured estimator. Cheap to construct – no model load."""
+    cfg = SeverityConfig(
+        roi_bottom_fraction=roi,
+        low_threshold=low,
+        medium_threshold=medium,
+        high_threshold=high,
+    )
+    return FloodSeverityEstimator(cfg)
+
+
+def _decode_image(raw: bytes) -> np.ndarray:
+    """Decode raw image bytes to BGR ndarray via OpenCV."""
+    arr = np.frombuffer(raw, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Cannot decode image bytes.")
+    return img
+
+
+def _mask_to_b64(mask: np.ndarray) -> str:
+    """Encode a binary (0/255) mask as a base64 PNG string."""
+    # Convert to RGBA: blue tint for water, transparent elsewhere
+    h, w = mask.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    water = mask > 0
+    rgba[water] = [30, 144, 255, 160]   # dodger-blue, semi-transparent
+    ok, buf = cv2.imencode(".png", rgba)
+    if not ok:
+        return ""
+    return base64.b64encode(buf.tobytes()).decode("ascii")
+
+
+@router.post("/analyze-severity")
+async def analyze_severity(
+    file: UploadFile = File(...),
+    roi: float = Query(0.5, ge=0.1, le=0.9, description="Bottom ROI fraction"),
+    low: float = Query(0.08,  ge=0.0, le=1.0, description="Low severity threshold"),
+    medium: float = Query(0.25, ge=0.0, le=1.0, description="Medium severity threshold"),
+    high: float = Query(0.50,  ge=0.0, le=1.0, description="High severity threshold"),
+):
+    """
+    Heuristic flood severity estimation endpoint.
+
+    Accepts an image file and returns:
+    - severity     : "None" | "Low" | "Medium" | "High"
+    - coverage_ratio  : boosted water coverage (0–1)
+    - raw_coverage    : coverage before wheel boost
+    - wheels_detected : number of wheel-like circles near water
+    - mask_b64        : base64-encoded RGBA PNG of the water mask overlay
+    """
+    if not validate_image_file(file.filename, AppConfig.ALLOWED_EXTENSIONS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: {', '.join(AppConfig.ALLOWED_EXTENSIONS)}",
+        )
+
+    try:
+        raw = await file.read()
+        img = _decode_image(raw)
+
+        estimator = _get_severity_estimator(roi, low, medium, high)
+        result = estimator.estimate(img)
+
+        mask_b64 = _mask_to_b64(result.water_mask)
+
+        return {
+            "success": True,
+            "severity": result.severity,
+            "coverage_ratio": round(result.coverage_ratio, 4),
+            "raw_coverage": round(result.raw_coverage_ratio, 4),
+            "wheels_detected": result.wheels_detected,
+            "mask_b64": mask_b64,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"analyze-severity error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Severity analysis failed.")

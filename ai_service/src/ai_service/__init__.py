@@ -7,6 +7,7 @@ as flooded or non-flooded using an ONNX model.
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging.config
 
@@ -53,10 +54,19 @@ def create_app() -> FastAPI:
     logger.info("Initializing AI Service application")
     logger.info(f"API Version: {AppConfig.API_VERSION}")
     logger.info(f"Debug Mode: {AppConfig.DEBUG}")
-    
+
+    # CORS – allow the frontend to call the AI service directly
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],      # Restrict to your frontend host in production
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     # Include routers
     app.include_router(health_router)
     app.include_router(api_router, prefix=AppConfig.API_PREFIX)
+
     
     logger.info("Routers registered")
     

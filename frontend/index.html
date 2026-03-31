@@ -206,6 +206,10 @@
                   <span class="dev-label">Chế độ test ngập lụt</span>
                 </label>
               </div>
+              <div id="test-mode-hint" class="dev-hint hidden">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;color:var(--color-accent-primary)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                <span>Nhấn vào camera để xem phân tích mức ngập AI</span>
+              </div>
             </div>
 
             <!-- Status Panel -->
@@ -481,10 +485,10 @@
       crossorigin=""
     ></script>
 
+    <!-- Socket.IO Client (must load before app.js) -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+
     <!-- App Logic -->
     <script src="app.js"></script>
-    
-    <!-- Socket.IO Client -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
   </body>
 </html>
