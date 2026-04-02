@@ -341,8 +341,8 @@ function showCameraPopup(camera, marker) {
     const analysisPanelId = `severity-panel-${camera.camera_id}`;
     const imageUrl = `${BACKEND_URL}/camera/${camera.camera_id}/image?t=${Date.now()}`;
     
-    // Severity analysis card (visible only in test mode)
-    const severitySection = state.floodTestMode ? `
+    // Severity analysis card (visible only if camera is flooded)
+    const severitySection = camera.is_flooded ? `
         <div class="severity-analysis-card" id="${analysisPanelId}">
             <div class="severity-analysis-header">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -432,8 +432,8 @@ function showCameraPopup(camera, marker) {
     // Store reference to current popup
     state.currentCameraPopup = popup;
 
-    // Trigger severity analysis after popup renders (only in test mode)
-    if (state.floodTestMode) {
+    // Trigger severity analysis after popup renders (only if flooded)
+    if (camera.is_flooded) {
         setTimeout(() => analyzeCameraFloodSeverity(camera.camera_id, imageUrl), 300);
     }
 }
