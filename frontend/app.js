@@ -1567,9 +1567,22 @@ async function sendChatMessage() {
                             removeTypingIndicator();
                             if (!chatState.currentAssistantBubble) {
                                 assistantDiv = createAssistantBubble();
+                                // Add a markdown class for styling
+                                chatState.currentAssistantBubble.classList.add('markdown-body');
                             }
                             chatState.currentAssistantText += event.content;
-                            chatState.currentAssistantBubble.textContent = chatState.currentAssistantText;
+                            // Use marked to parse markdown to HTML if available
+                            if (typeof marked !== 'undefined') {
+                                const rawHtml = marked.parse(chatState.currentAssistantText);
+                                // Sanitize if DOMPurify is available
+                                if (typeof DOMPurify !== 'undefined') {
+                                    chatState.currentAssistantBubble.innerHTML = DOMPurify.sanitize(rawHtml);
+                                } else {
+                                    chatState.currentAssistantBubble.innerHTML = rawHtml;
+                                }
+                            } else {
+                                chatState.currentAssistantBubble.textContent = chatState.currentAssistantText;
+                            }
                             scrollChatToBottom();
                             break;
 

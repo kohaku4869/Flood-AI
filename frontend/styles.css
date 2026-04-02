@@ -2174,6 +2174,31 @@ body {
   margin-bottom: 0;
 }
 
+/* Markdown Rendering Styles */
+.markdown-body ul, .markdown-body ol {
+  margin: 8px 0 8px 20px;
+  padding: 0;
+}
+.markdown-body li {
+  margin-bottom: 4px;
+}
+.markdown-body strong {
+  color: var(--color-text-white);
+  font-weight: 700;
+}
+.markdown-body em {
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+.markdown-body code {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9em;
+  color: var(--color-accent-primary);
+}
+
 .chat-message.error .chat-bubble {
   background: rgba(252, 129, 129, 0.1);
   color: var(--color-error);
