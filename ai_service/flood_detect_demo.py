@@ -49,12 +49,9 @@ _IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 def build_config(args: argparse.Namespace) -> SeverityConfig:
     """Construct a SeverityConfig from CLI arguments."""
     return SeverityConfig(
-        roi_bottom_fraction=args.roi,
         low_threshold=args.low,
         medium_threshold=args.medium,
         high_threshold=args.high,
-        use_wheel_detection=not args.no_wheel,
-        use_texture_gate=not args.no_texture,
     )
 
 
@@ -107,10 +104,9 @@ def main() -> None:
     parser.add_argument("--panel-width", type=int, default=640, help="Width of each side-by-side panel (px).")
 
     # Threshold tuning
-    parser.add_argument("--roi",    type=float, default=0.50, help="Bottom fraction used as ROI [0–1].")
-    parser.add_argument("--low",    type=float, default=0.08, help="Coverage threshold for LOW severity.")
-    parser.add_argument("--medium", type=float, default=0.25, help="Coverage threshold for MEDIUM severity.")
-    parser.add_argument("--high",   type=float, default=0.50, help="Coverage threshold for HIGH severity.")
+    parser.add_argument("--low",    type=float, default=0.05, help="Coverage threshold for LOW severity.")
+    parser.add_argument("--medium", type=float, default=0.20, help="Coverage threshold for MEDIUM severity.")
+    parser.add_argument("--high",   type=float, default=0.45, help="Coverage threshold for HIGH severity.")
 
     # Feature toggles
     parser.add_argument("--no-wheel",   action="store_true", help="Disable wheel/reference-object detection.")
@@ -140,10 +136,7 @@ def main() -> None:
         sys.exit(1)
 
     print(f"\nFlood Severity Estimator  –  {len(images)} image(s)")
-    print(f"Config: roi={cfg.roi_bottom_fraction} | "
-          f"thresholds=({cfg.low_threshold}, {cfg.medium_threshold}, {cfg.high_threshold}) | "
-          f"wheels={'on' if cfg.use_wheel_detection else 'off'} | "
-          f"texture_gate={'on' if cfg.use_texture_gate else 'off'}")
+    print(f"Config: thresholds=({cfg.low_threshold}, {cfg.medium_threshold}, {cfg.high_threshold})")
     print("-" * 70)
 
     for img_path in images:

@@ -1136,21 +1136,39 @@ body {
 .metadata-label {
   color: var(--color-text-secondary);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .metadata-value {
   color: var(--color-text-primary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
-/* ================================
-   Flood Severity Analysis Card
-   (shown inside camera popup when test mode is on)
-   ================================ */
+.camera-popup-main {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.camera-popup-left {
+  flex: 1.5; /* Ưu tiên không gian cho camera */
+  min-width: 450px;
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-popup-right {
+  flex: 1;
+  min-width: 350px;
+  background: rgba(14, 165, 233, 0.04);
+  border-left: 1px solid var(--color-border);
+}
+
 .severity-analysis-card {
-  border-top: 1px solid var(--color-border);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.07) 0%, rgba(56, 189, 248, 0.04) 100%);
+  background: transparent;
   padding: var(--spacing-md);
+  height: 100%;
 }
 
 .severity-analysis-header {

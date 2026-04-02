@@ -381,44 +381,48 @@ function showCameraPopup(camera, marker) {
                 <h3 class="camera-popup-title">${cameraName}</h3>
                 <span class="camera-popup-status ${statusClass}">${status}</span>
             </div>
-            <div class="camera-popup-image-container">
-                <img 
-                    class="camera-popup-image" 
-                    id="camera-img-${camera.camera_id}"
-                    src="${imageUrl}"
-                    alt="Camera ${cameraName}"
-                    onload="this.style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
-                    onerror="this.style.display='none'; document.getElementById('error-${camera.camera_id}').style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
-                    style="display: none;"
-                />
-                <div class="camera-popup-loading" id="loading-${camera.camera_id}">
-                    <div class="spinner-small"></div>
-                    <span>Đang tải ảnh...</span>
+            <div class="camera-popup-main">
+                <div class="camera-popup-left">
+                    <div class="camera-popup-image-container">
+                        <img 
+                            class="camera-popup-image" 
+                            id="camera-img-${camera.camera_id}"
+                            src="${imageUrl}"
+                            alt="Camera ${cameraName}"
+                            onload="this.style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
+                            onerror="this.style.display='none'; document.getElementById('error-${camera.camera_id}').style.display='block'; document.getElementById('loading-${camera.camera_id}').style.display='none';"
+                            style="display: none;"
+                        />
+                        <div class="camera-popup-loading" id="loading-${camera.camera_id}">
+                            <div class="spinner-small"></div>
+                            <span>Đang tải ảnh...</span>
+                        </div>
+                        <div class="camera-popup-error" id="error-${camera.camera_id}" style="display: none;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                            <span>Không thể tải ảnh camera</span>
+                        </div>
+                    </div>
+                    <div class="camera-popup-metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label">Độ tin cậy:</span>
+                            <span class="metadata-value">${confidence}%</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Kiểm tra lần cuối:</span>
+                            <span class="metadata-value">${lastChecked}</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="camera-popup-error" id="error-${camera.camera_id}" style="display: none;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                    </svg>
-                    <span>Không thể tải ảnh camera</span>
-                </div>
+                ${severitySection ? `<div class="camera-popup-right">${severitySection}</div>` : ''}
             </div>
-            <div class="camera-popup-metadata">
-                <div class="metadata-item">
-                    <span class="metadata-label">Độ tin cậy:</span>
-                    <span class="metadata-value">${confidence}%</span>
-                </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Kiểm tra lần cuối:</span>
-                    <span class="metadata-value">${lastChecked}</span>
-                </div>
-            </div>
-            ${severitySection}
         </div>
     `;
     
     // Create and open popup
     const popup = L.popup({
-        maxWidth: 420,
+        maxWidth: 900,
         className: 'custom-camera-popup'
     })
     .setLatLng([camera.coords.lat, camera.coords.lng])

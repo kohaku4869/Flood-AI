@@ -17,9 +17,18 @@ from typing import Dict, List
 BASE_DIR = Path(__file__).resolve().parent
 
 # Model directory and file paths
-MODEL_DIR = BASE_DIR / "models"
-MODEL_PATH = MODEL_DIR / "flood_model_final.onnx"
-MODEL_DATA_PATH = MODEL_DIR / "flood_model_final.onnx.data"
+MODELS_DIR = BASE_DIR / "models"
+MODEL_DIR = MODELS_DIR  # backward-compat alias
+MODEL_PATH = MODELS_DIR / "flood_model_final.onnx"
+MODEL_DATA_PATH = MODELS_DIR / "flood_model_final.onnx.data"
+
+# YOLO Severity Model (flood segmentation, 1 class: flood)
+# Export with: yolo export model=best.pt format=onnx imgsz=640 simplify=True
+# Place the exported file here:
+YOLO_SEVERITY_MODEL_PATH = MODELS_DIR / "yolo_flood_seg.onnx"
+
+# data.yaml class mapping  →  nc: 1, names: ['flood']
+YOLO_FLOOD_CLASS_ID: int = 0  # class index for "flood"
 
 
 # ============================================================================

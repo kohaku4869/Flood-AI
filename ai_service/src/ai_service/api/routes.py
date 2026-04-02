@@ -201,24 +201,36 @@ async def health_check():
     return response
 
 
-# Singleton severity estimator (default config, lazy-init OK since it has no heavy model)
+# Lazy singleton – YOLO model is loaded once on first request.
 _severity_estimator: Optional[FloodSeverityEstimator] = None
 
 
 def _get_severity_estimator(
-    roi: float = 0.5,
-    low: float = 0.08,
-    medium: float = 0.25,
-    high: float = 0.50,
+    low: float = 0.05,
+    medium: float = 0.20,
+    high: float = 0.45,
 ) -> FloodSeverityEstimator:
-    """Return a (re)configured estimator. Cheap to construct – no model load."""
-    cfg = SeverityConfig(
-        roi_bottom_fraction=roi,
-        low_threshold=low,
-        medium_threshold=medium,
-        high_threshold=high,
-    )
-    return FloodSeverityEstimator(cfg)
+    """Return the singleton YOLO severity estimator, creating it on first call.
+
+    The YOLO model is loaded once and reused for all subsequent requests.
+    Config thresholds are applied to the existing instance when parameters differ
+    from the defaults, allowing per-request tuning without reloading the model.
+    """
+    global _severity_estimator
+    if _severity_estimator is None:
+        logger.info("Initialising YOLO FloodSeverityEstimator (first request) …")
+        cfg = SeverityConfig(
+            low_threshold=low,
+            medium_threshold=medium,
+            high_threshold=high,
+        )
+        _severity_estimator = FloodSeverityEstimator(cfg)
+    else:
+        # Allow per-request threshold overrides without reloading the model
+        _severity_estimator.cfg.low_threshold = low
+        _severity_estimator.cfg.medium_threshold = medium
+        _severity_estimator.cfg.high_threshold = high
+    return _severity_estimator
 
 
 def _decode_image(raw: bytes) -> np.ndarray:
@@ -246,20 +258,22 @@ def _mask_to_b64(mask: np.ndarray) -> str:
 @router.post("/analyze-severity")
 async def analyze_severity(
     file: UploadFile = File(...),
-    roi: float = Query(0.5, ge=0.1, le=0.9, description="Bottom ROI fraction"),
-    low: float = Query(0.08,  ge=0.0, le=1.0, description="Low severity threshold"),
-    medium: float = Query(0.25, ge=0.0, le=1.0, description="Medium severity threshold"),
-    high: float = Query(0.50,  ge=0.0, le=1.0, description="High severity threshold"),
+    low: float = Query(0.05, ge=0.0, le=1.0, description="Low severity threshold"),
+    medium: float = Query(0.20, ge=0.0, le=1.0, description="Medium severity threshold"),
+    high: float = Query(0.45, ge=0.0, le=1.0, description="High severity threshold"),
 ):
     """
-    Heuristic flood severity estimation endpoint.
+    YOLO-based flood severity estimation endpoint.
+
+    Runs YOLOv8 segmentation to extract the flood mask, then maps the ROI
+    coverage ratio to a severity level.
 
     Accepts an image file and returns:
-    - severity     : "None" | "Low" | "Medium" | "High"
-    - coverage_ratio  : boosted water coverage (0–1)
-    - raw_coverage    : coverage before wheel boost
-    - wheels_detected : number of wheel-like circles near water
-    - mask_b64        : base64-encoded RGBA PNG of the water mask overlay
+    - severity        : "None" | "Low" | "Medium" | "High"
+    - coverage_ratio  : flood mask coverage in bottom ROI (0–1)
+    - raw_coverage    : same as coverage_ratio (kept for API compat)
+    - wheels_detected : always 0 (kept for API backward-compat)
+    - mask_b64        : base64-encoded RGBA PNG of the YOLO flood mask overlay
     """
     if not validate_image_file(file.filename, AppConfig.ALLOWED_EXTENSIONS):
         raise HTTPException(
@@ -271,7 +285,7 @@ async def analyze_severity(
         raw = await file.read()
         img = _decode_image(raw)
 
-        estimator = _get_severity_estimator(roi, low, medium, high)
+        estimator = _get_severity_estimator(low, medium, high)
         result = estimator.estimate(img)
 
         mask_b64 = _mask_to_b64(result.water_mask)
